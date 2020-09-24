@@ -75,8 +75,10 @@ type Server struct {
 	MembershipMap map[string]*Member
 	// MembershipList [] *Member
 	Mode string
-	// initilized when a server sned heartbeat, sentmap has all machine a heartbeat is sent to, ans_cnt is number of machine expected to ans
-	SentMap map[string]*Member
+	// initilized when a server sned heartbeat,
+	//sentmap has all machine a heartbeat is sent to,
+	SentMap map[string]int
+	//ans_cnt is number of machine expected to ans
 	ans_cnt int
 }
 
@@ -290,7 +292,8 @@ func messageHandler(server *Server, resp []byte, bytes_read int) {
 			server.Mode = GOSSIP
 		}
 	} else if message.MessageType == ACK {
-
+		// set corresponding machine as alive
+		server.SentMap[message.Hostname] = 1
 	}
 
 	return
@@ -304,9 +307,35 @@ func sendHeartbeat(server *Server) {
 		/*GOSSIP HEARTBEAT*/
 	} else {
 		/*ALL_TO_ALL_HEARTBEAT*/
-		server.MembershipMap[message.Hostname].Heartbeat += 1
-		sendRunning(server, HEARTBEAT)
+		server.SentMap = make(map[string]int)
+		server.MembershipMap[server.Hostname].Heartbeat += 1
+		for hostname := range NODES {
+			if server.MembershipMap[NODES[hostname]].Status == RUNNING {
+				// initialize item in sentmap, wait for resp
+				server.SentMap[NODES[hostname]] = 0
+				socket, err := net.Dial("udp", NODES[hostname]+":"+PORT)
+				if err != nil {
+					fmt.Printf("Error: dialing UDP from introducer to normal nodes")
+				}
+				var message Message = Message{
+					MessageType:   HEARTBEAT,
+					Mode:          server.Mode,
+					Hostname:      server.Hostname,
+					MembershipMap: dereferencedMemebershipMap(server.MembershipMap),
+				}
+
+				//marshal the message to json
+				var marshaledMsg []byte = marshalMsg(message)
+
+				// write to the socket
+				_, err = socket.Write(marshaledMsg)
+				if err != nil {
+					fmt.Printf("Error: Writing JOIN message to the socket: %s", err)
+				}
+			}
+		}
 	}
+	// TODO : Start timeout clock, make timeout a message?
 	return
 }
 
@@ -484,10 +513,10 @@ func getCurrentTime() int32 {
  * send a message of type msgType to all RUNNING member in membership list
  */
 func sendRunning(server *Server, msgType string) {
-	// TODO:EDGE CASE , Join while heartbeat ongoing in sytem
+	// TODO : EDGE CASE , Join while heartbeat ongoing in sytem
 	for hostname := range NODES {
-		if sever.MembershipMap[hostname].status == RUNNING {
-			socket, err := net.Dial("udp", hostname+":"+PORT)
+		if server.MembershipMap[NODES[hostname]].Status == RUNNING {
+			socket, err := net.Dial("udp", NODES[hostname]+":"+PORT)
 			if err != nil {
 				fmt.Printf("Error: dialing UDP from introducer to normal nodes")
 			}
@@ -534,5 +563,34 @@ func heartBeatHandler(server *Server, message Message) {
  * Respond a heartbeat from message.Hostname with an ack package
  */
 func respHeatbeat(server *Server, message Message) {
+	socket, err := net.Dial("udp", message.Hostname+":"+PORT)
+	if err != nil {
+		fmt.Printf("Error: dialing UDP from introducer to normal nodes")
+	}
+	var resp_message Message = Message{
+		MessageType:   ACK,
+		Mode:          server.Mode,
+		Hostname:      server.Hostname,
+		MembershipMap: dereferencedMemebershipMap(server.MembershipMap),
+	}
 
+	//marshal the message to json
+	var marshaledMsg []byte = marshalMsg(resp_message)
+
+	// write to the socket
+	_, err = socket.Write(marshaledMsg)
+	if err != nil {
+		fmt.Printf("Error: Writing JOIN message to the socket: %s", err)
+	}
+}
+
+/*
+ * Called at heartbeat start + TIMEOUT, check all machine, update status if a machine is dead
+ */
+func timeOut(server *Server) {
+	for node := range server.SentMap {
+		if server.SentMap[node] == 0 {
+			server.MembershipMap[node].Status = FAILED
+		}
+	}
 }
