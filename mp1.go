@@ -307,6 +307,10 @@ func sendHeartbeat(server *Server) {
 		/*GOSSIP HEARTBEAT*/
 	} else {
 		/*ALL_TO_ALL_HEARTBEAT*/
+		/* TODO : ALL_TO_ALL Heartbeat:
+		*	start timeout timer after message sent
+		*	edgecase :join while heartbeat ongoing
+		 */
 		server.SentMap = make(map[string]int)
 		server.MembershipMap[server.Hostname].Heartbeat += 1
 		for hostname := range NODES {
@@ -335,7 +339,6 @@ func sendHeartbeat(server *Server) {
 			}
 		}
 	}
-	// TODO : Start timeout clock, make timeout a message?
 	return
 }
 
@@ -513,7 +516,6 @@ func getCurrentTime() int32 {
  * send a message of type msgType to all RUNNING member in membership list
  */
 func sendRunning(server *Server, msgType string) {
-	// TODO : EDGE CASE , Join while heartbeat ongoing in sytem
 	for hostname := range NODES {
 		if server.MembershipMap[NODES[hostname]].Status == RUNNING {
 			socket, err := net.Dial("udp", NODES[hostname]+":"+PORT)
@@ -552,7 +554,7 @@ func heartBeatHandler(server *Server, message Message) {
 		// all to all
 		// server.MembershipMap[message.Hostname].Heartbeat += 1 :CHANGE, increment cnt when sending to ensure every node send only one heartbeat
 		server.MembershipMap[message.Hostname].Timestamp = getCurrentTime()
-		if server.MembershipMap[message.Hostname].Heartbeat < 1 { // TODO: clear this count after one round of heatbearting (in handle heartbeat function?)
+		if server.MembershipMap[message.Hostname].Heartbeat < 1 {
 			sendHeartbeat(server)
 		}
 	}
@@ -588,6 +590,9 @@ func respHeatbeat(server *Server, message Message) {
  * Called at heartbeat start + TIMEOUT, check all machine, update status if a machine is dead
  */
 func timeOut(server *Server) {
+	// clear heartbeat count
+	server.MembershipMap[server.Hostname].Heartbeat = 0
+	// mark machine not respond with failed
 	for node := range server.SentMap {
 		if server.SentMap[node] == 0 {
 			server.MembershipMap[node].Status = FAILED
