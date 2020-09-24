@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"math/rand"
 	"net"
 	"os"
 	"strconv"
@@ -18,11 +19,14 @@ var mutex sync.Mutex
 
 // CONFIG
 const (
-	INTRODUCER  string = "fa20-cs425-g35-01.cs.illinois.edu"
-	PORT        string = "14285"
-	NODE_CNT    int    = 10
-	TIMEOUT            = 200 * time.Millisecond
-	BEAT_PERIOD        = 20 * time.Second
+	INTRODUCER     string = "fa20-cs425-g35-01.cs.illinois.edu"
+	PORT           string = "14285"
+	NODE_CNT       int    = 10
+	GOSSIP_PARA    int    = 4                      // number of machine to gossip to at same time
+	TIMEOUT               = 100 * time.Millisecond //only have 6 second to finish heartbeat and update member list
+	GOSSIP_TIMEOUT        = 20 * time.Millisecond
+	BEAT_PERIOD           = 10 * time.Second
+	CLEANUP               = 100 * time.Millisecond
 	//TIEMOUT int = 200 time.Duration(Timeout) * Millisecond
 )
 
@@ -46,7 +50,6 @@ const (
 	JOIN        string = "JOIN"
 	LEAVE       string = "LEAVE"
 	CHANGE      string = "CHANGE"
-	ACK         string = "ACK"
 )
 
 // Message struct
@@ -65,7 +68,9 @@ type Member struct {
 	Heartbeat int
 	Hostname  string
 	Status    string
-	Timestamp int32
+	// REVIEW this is change viable: chang all Timestamp = gettimeNow to Timestanp = time.Now()
+	// Timestamp int32
+	Timestamp time.Time
 }
 
 //Current server
@@ -105,7 +110,8 @@ func main() {
 			Id:        index,
 			Hostname:  host,
 			Status:    CREATED,
-			Timestamp: getCurrentTime(),
+			Timestamp: time.Now(),
+			// Timestamp: getCurrentTime(),
 			Heartbeat: 0,
 		}
 		server_temp.MembershipMap[host] = member
@@ -117,8 +123,8 @@ func main() {
 
 	//make the server listening to the port
 	go messageListener(server)
-	go timer(server)
 	// read command from the commandline
+	go timer(server)
 	commandReader(server)
 
 }
@@ -240,7 +246,6 @@ func messageHandler(server *Server, resp []byte, bytes_read int) {
 		// sent from the introducer
 		// the introducer will always receive JOIN at first, it them disseminate to other nodes
 		if server.Hostname == INTRODUCER {
-			///Q: Introducer initialize every machine,instead of let them join on their own?
 			for _, hostname := range NODES {
 				socket, err := net.Dial("udp", hostname+":"+PORT)
 				if err != nil {
@@ -292,9 +297,6 @@ func messageHandler(server *Server, resp []byte, bytes_read int) {
 		} else {
 			server.Mode = GOSSIP
 		}
-	} else if message.MessageType == ACK {
-		// set corresponding machine as alive
-		server.SentMap[message.Hostname] = 1
 	}
 
 	return
@@ -306,50 +308,67 @@ SENDING & MONITORING HEARTBEATS
 func sendHeartbeat(server *Server) {
 	if server.Mode == "GOSSIP" {
 		/*GOSSIP HEARTBEAT*/
-	} else {
-		/*ALL_TO_ALL_HEARTBEAT*/
-		/* TODO : ALL_TO_ALL Heartbeat:
-		*	start timeout timer after message sent
-		*	edgecase :join while heartbeat ongoing
-		 */
-		server.SentMap = make(map[string]int)
-		server.MembershipMap[server.Hostname].Heartbeat += 1
-		for hostname := range NODES {
-			if server.MembershipMap[NODES[hostname]].Status == RUNNING {
-				// initialize item in sentmap, wait for resp
-				server.SentMap[NODES[hostname]] = 0
-				socket, err := net.Dial("udp", NODES[hostname]+":"+PORT)
-				if err != nil {
-					fmt.Printf("Error: dialing UDP from introducer to normal nodes")
-				}
-				var message Message = Message{
-					MessageType:   HEARTBEAT,
-					Mode:          server.Mode,
-					Hostname:      server.Hostname,
-					MembershipMap: dereferencedMemebershipMap(server.MembershipMap),
-				}
+		//select a random receiver
+		var rand_Nodes []string
+		for i := 0; i < GOSSIP_PARA; i++ {
+			rand_Nodes[i] = NODES[rand.Intn(10)+1] // random from 0 to 9, +1 make it 1 to 10
+		}
+		for _, node := range rand_Nodes {
+			socket, err := net.Dial("udp", node+":"+PORT)
+			if err != nil {
+				fmt.Printf("Error: dialing UDP from introducer to normal nodes")
+			}
+			var message Message = Message{
+				MessageType:   HEARTBEAT,
+				Mode:          server.Mode,
+				Hostname:      server.Hostname,
+				MembershipMap: dereferencedMemebershipMap(server.MembershipMap),
+			}
 
-				//marshal the message to json
-				var marshaledMsg []byte = marshalMsg(message)
+			//marshal the message to json
+			var marshaledMsg []byte = marshalMsg(message)
 
-				// write to the socket
-				_, err = socket.Write(marshaledMsg)
-				if err != nil {
-					fmt.Printf("Error: Writing JOIN message to the socket: %s", err)
-				}
+			// write to the socket
+			_, err = socket.Write(marshaledMsg)
+			if err != nil {
+				fmt.Printf("Error: Writing JOIN message to the socket: %s", err)
 			}
 		}
+	} else {
+		/*ALL_TO_ALL_HEARTBEAT*/
+		sendRunning(server, HEARTBEAT)
 	}
 	return
 }
 
-func monitor(server *Server) { //Q: Message listener and monitor = same thing?
+/*
+ * monitor function invocked immediatly after server send a heartbeat
+ * manage membership list status according to heartbeat mode
+ */
+func monitor(server *Server) {
 	if server.Mode == "GOSSIP" {
 		/*GOSSIP HEARTBEAT*/
+		// TODO : Check if this always fail any process
+		time.Sleep(GOSSIP_TIMEOUT)
+		for _, node := range server.MembershipMap {
+			if (time.Now().Add(-GOSSIP_TIMEOUT)).After(node.Timestamp) {
+				node.Status = FAILED
+			}
+		}
+		time.Sleep(CLEANUP)
+		for _, node := range server.MembershipMap {
+			if time.Now().Add(-GOSSIP_TIMEOUT).Add(-CLEANUP).After(node.Timestamp) {
+				node.Status = LEAVE
+			}
+		}
 	} else {
+		time.Sleep(TIMEOUT)
 		/*ALL_TO_ALL_HEARTBEAT*/
-		//wait for all machine in group to send a ack, timeout = 200ms
-
+		for _, node := range server.MembershipMap {
+			if time.Now().Add(-TIMEOUT).After(node.Timestamp) {
+				node.Status = FAILED
+			}
+		}
 	}
 	return
 }
@@ -389,7 +408,7 @@ func join(server *Server) {
 
 	}
 	// Q: Timing on send and monitor heartbeat?
-	// Q: Why both monitor and Message Listener
+
 	go sendHeartbeat(server)
 	go monitor(server)
 }
@@ -444,7 +463,6 @@ func change(server *Server) {
 		server.Mode = GOSSIP
 	}
 	sendRunning(server, CHANGE)
-
 	return
 }
 
@@ -472,7 +490,8 @@ func merge(self map[string]*Member, other map[string]Member) {
 		} else {
 			if member.Heartbeat > self[key].Heartbeat {
 				self[key].Heartbeat = member.Heartbeat
-				self[key].Timestamp = getCurrentTime()
+				self[key].Timestamp = time.Now()
+				// self[key].Timestamp = getCurrentTime()
 			}
 		}
 	}
@@ -509,6 +528,7 @@ func makeNodes() [10]string {
 	return result
 }
 
+// TODO : .Unix is a int 64 value
 func getCurrentTime() int32 {
 	return int32(time.Now().Unix())
 }
@@ -550,65 +570,23 @@ func heartBeatHandler(server *Server, message Message) {
 	// Sent from a node to another node
 	if server.Mode == GOSSIP {
 		// need to merge
-		merge(server.MembershipMap, message.MembershipMap) //Q:Why do this? <- change status from created to () ?
+		merge(server.MembershipMap, message.MembershipMap)
 	} else {
 		// all to all
-		// server.MembershipMap[message.Hostname].Heartbeat += 1 :CHANGE, increment cnt when sending to ensure every node send only one heartbeat
-		server.MembershipMap[message.Hostname].Timestamp = getCurrentTime()
-		if server.MembershipMap[message.Hostname].Heartbeat < 1 {
-			sendHeartbeat(server)
-		}
+		// server.MembershipMap[message.Hostname].Timestamp = getCurrentTime()
+		server.MembershipMap[message.Hostname].Timestamp = time.Now()
+		server.MembershipMap[message.Hostname].Heartbeat += 1
+		server.MembershipMap[message.Hostname].Status = RUNNING
 	}
-	respHeatbeat(server, message)
+	go monitor(server)
 }
 
 /*
- * Respond a heartbeat from message.Hostname with an ack package
- */
-func respHeatbeat(server *Server, message Message) {
-	socket, err := net.Dial("udp", message.Hostname+":"+PORT)
-	if err != nil {
-		fmt.Printf("Error: dialing UDP from introducer to normal nodes")
-	}
-	var resp_message Message = Message{
-		MessageType:   ACK,
-		Mode:          server.Mode,
-		Hostname:      server.Hostname,
-		MembershipMap: dereferencedMemebershipMap(server.MembershipMap),
-	}
-
-	//marshal the message to json
-	var marshaledMsg []byte = marshalMsg(resp_message)
-
-	// write to the socket
-	_, err = socket.Write(marshaledMsg)
-	if err != nil {
-		fmt.Printf("Error: Writing JOIN message to the socket: %s", err)
-	}
-}
-
-/*
- * Called at heartbeat start + TIMEOUT, check all machine, update status if a machine is dead
- */
-func timeOut(server *Server) {
-	// clear heartbeat count
-	server.MembershipMap[server.Hostname].Heartbeat = 0
-	// mark machine not respond with failed
-	for node := range server.SentMap {
-		if server.SentMap[node] == 0 {
-			server.MembershipMap[node].Status = FAILED
-		}
-	}
-}
-
-/*
- * timer function, responsible for periodically send heatbeat to other nodes, and manage timeout function
+ * timer function, responsible for periodically send heatbeat to other nodes
  */
 func timer(server *Server) {
 	for {
 		time.Sleep(BEAT_PERIOD)
 		sendHeartbeat(server)
-		time.Sleep(TIMEOUT)
-		timeOut(server)
 	}
 }
