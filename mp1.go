@@ -18,10 +18,11 @@ var mutex sync.Mutex
 
 // CONFIG
 const (
-	INTRODUCER string   = "fa20-cs425-g35-01.cs.illinois.edu"
-	PORT       string   = "14285"
-	NODE_CNT   int      = 10
-	TIMEOUT    duration = 200 * time.Millisecond
+	INTRODUCER  string = "fa20-cs425-g35-01.cs.illinois.edu"
+	PORT        string = "14285"
+	NODE_CNT    int    = 10
+	TIMEOUT            = 200 * time.Millisecond
+	BEAT_PERIOD        = 20 * time.Second
 	//TIEMOUT int = 200 time.Duration(Timeout) * Millisecond
 )
 
@@ -116,7 +117,7 @@ func main() {
 
 	//make the server listening to the port
 	go messageListener(server)
-
+	go timer(server)
 	// read command from the commandline
 	commandReader(server)
 
@@ -597,5 +598,17 @@ func timeOut(server *Server) {
 		if server.SentMap[node] == 0 {
 			server.MembershipMap[node].Status = FAILED
 		}
+	}
+}
+
+/*
+ * timer function, responsible for periodically send heatbeat to other nodes, and manage timeout function
+ */
+func timer(server *Server) {
+	for {
+		time.Sleep(BEAT_PERIOD)
+		sendHeartbeat(server)
+		time.Sleep(TIMEOUT)
+		timeOut(server)
 	}
 }
