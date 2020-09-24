@@ -18,9 +18,11 @@ var mutex sync.Mutex
 
 // CONFIG
 const (
-	INTRODUCER string = "fa20-cs425-g35-01.cs.illinois.edu"
-	PORT       string = "14285"
-	NODE_CNT   int    = 10
+	INTRODUCER string   = "fa20-cs425-g35-01.cs.illinois.edu"
+	PORT       string   = "14285"
+	NODE_CNT   int      = 10
+	TIMEOUT    duration = 200 * time.Millisecond
+	//TIEMOUT int = 200 time.Duration(Timeout) * Millisecond
 )
 
 var NODES [NODE_CNT]string = makeNodes()
@@ -43,6 +45,7 @@ const (
 	JOIN        string = "JOIN"
 	LEAVE       string = "LEAVE"
 	CHANGE      string = "CHANGE"
+	ACK         string = "ACK"
 )
 
 // Message struct
@@ -72,6 +75,9 @@ type Server struct {
 	MembershipMap map[string]*Member
 	// MembershipList [] *Member
 	Mode string
+	// initilized when a server sned heartbeat, sentmap has all machine a heartbeat is sent to, ans_cnt is number of machine expected to ans
+	SentMap map[string]*Member
+	ans_cnt int
 }
 
 /**
@@ -208,18 +214,7 @@ func messageHandler(server *Server, resp []byte, bytes_read int) {
 	message := unmarshalMsg([]byte(string(resp[:bytes_read])))
 
 	if message.MessageType == HEARTBEAT {
-		// Sent from a node to another node
-		if server.Mode == GOSSIP {
-			// need to merge
-			merge(server.MembershipMap, message.MembershipMap) //Q:Why do this? <- change status from created to () ?
-		} else {
-			// all to all
-			// server.MembershipMap[message.Hostname].Heartbeat += 1 :CHANGE, increment cnt when sending to ensure every node send only one heartbeat
-			server.MembershipMap[message.Hostname].Timestamp = getCurrentTime()
-			if server.MembershipMap[message.Hostname].Heartbeat < 1 { // TODO: clear this count after one round of heatbearting (in handle heartbeat function?)
-				sendHeartbeat(server)
-			}
-		}
+		heartBeatHandler(server, message)
 	} else if message.MessageType == INITIALIZED {
 		// Sent from the introducer to the new joined node
 		// receives a message of initialized; Only the new joined node is able to receive this
@@ -290,10 +285,12 @@ func messageHandler(server *Server, resp []byte, bytes_read int) {
 
 	} else if message.MessageType == CHANGE {
 		if server.Mode == GOSSIP {
-			server.Mode == ALL_TO_ALL
+			server.Mode = ALL_TO_ALL
 		} else {
-			server.Mode == GOSSIP
+			server.Mode = GOSSIP
 		}
+	} else if message.MessageType == ACK {
+
 	}
 
 	return
@@ -308,17 +305,17 @@ func sendHeartbeat(server *Server) {
 	} else {
 		/*ALL_TO_ALL_HEARTBEAT*/
 		server.MembershipMap[message.Hostname].Heartbeat += 1
-		sendRunning(server,HEARTBEAT)
+		sendRunning(server, HEARTBEAT)
 	}
 	return
 }
 
-func monitor(server *Server) {
+func monitor(server *Server) { //Q: Message listener and monitor = same thing?
 	if server.Mode == "GOSSIP" {
 		/*GOSSIP HEARTBEAT*/
 	} else {
 		/*ALL_TO_ALL_HEARTBEAT*/
-		//wait for all machine in group to send a ack, timeout =
+		//wait for all machine in group to send a ack, timeout = 200ms
 
 	}
 	return
@@ -359,6 +356,7 @@ func join(server *Server) {
 
 	}
 	// Q: Timing on send and monitor heartbeat?
+	// Q: Why both monitor and Message Listener
 	go sendHeartbeat(server)
 	go monitor(server)
 }
@@ -408,12 +406,12 @@ CHANGING HEATBEAING STYLE
 */
 func change(server *Server) {
 	if server.Mode == GOSSIP {
-		server.Mode == ALL_TO_ALL
+		server.Mode = ALL_TO_ALL
 	} else {
-		server.Mode == GOSSIP
+		server.Mode = GOSSIP
 	}
-	sendRunning(server,CHANGE)
-	
+	sendRunning(server, CHANGE)
+
 	return
 }
 
@@ -482,25 +480,13 @@ func getCurrentTime() int32 {
 	return int32(time.Now().Unix())
 }
 
-// TODO: Slow function 
-func findRunning(members map[string]*Member) int {
-	var result int 
-	var map[stirng]temp  =  dereferencedMemebershipMap(members)
-	for member := range temp{
-		if temp.status == RUNNING{
-			result ++
-		}
-	}
-	return result 
-}
-
 /*
  * send a message of type msgType to all RUNNING member in membership list
  */
-func sendRunning(server *Server, msgType string){
+func sendRunning(server *Server, msgType string) {
 	// TODO:EDGE CASE , Join while heartbeat ongoing in sytem
 	for hostname := range NODES {
-		if sever.MembershipMap[hostname].status == RUNNING{
+		if sever.MembershipMap[hostname].status == RUNNING {
 			socket, err := net.Dial("udp", hostname+":"+PORT)
 			if err != nil {
 				fmt.Printf("Error: dialing UDP from introducer to normal nodes")
@@ -522,4 +508,31 @@ func sendRunning(server *Server, msgType string){
 			}
 		}
 	}
+}
+
+/*
+ * heartBeat Handler, handler received heartbeat
+ * 	propagate heartbeat if necessary, respond sender with an ack
+ */
+func heartBeatHandler(server *Server, message Message) {
+	// Sent from a node to another node
+	if server.Mode == GOSSIP {
+		// need to merge
+		merge(server.MembershipMap, message.MembershipMap) //Q:Why do this? <- change status from created to () ?
+	} else {
+		// all to all
+		// server.MembershipMap[message.Hostname].Heartbeat += 1 :CHANGE, increment cnt when sending to ensure every node send only one heartbeat
+		server.MembershipMap[message.Hostname].Timestamp = getCurrentTime()
+		if server.MembershipMap[message.Hostname].Heartbeat < 1 { // TODO: clear this count after one round of heatbearting (in handle heartbeat function?)
+			sendHeartbeat(server)
+		}
+	}
+	respHeatbeat(server, message)
+}
+
+/*
+ * Respond a heartbeat from message.Hostname with an ack package
+ */
+func respHeatbeat(server *Server, message Message) {
+
 }
