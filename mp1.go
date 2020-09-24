@@ -1,17 +1,16 @@
 package mp1
 
 import (
-	"fmt"
-	"os"
 	"bufio"
-	"strings"
 	"bytes"
-	"time"
-	"net"
 	"encoding/json"
-	"sync"
+	"fmt"
+	"net"
+	"os"
 	"strconv"
-
+	"strings"
+	"sync"
+	"time"
 )
 
 //lock
@@ -20,62 +19,60 @@ var mutex sync.Mutex
 // CONFIG
 const (
 	INTRODUCER string = "fa20-cs425-g35-01.cs.illinois.edu"
-	PORT string = "14285"
+	PORT       string = "14285"
+	NODE_CNT   int    = 10
 )
 
-var NODES [10]string = makeNodes()
+var NODES [NODE_CNT]string = makeNodes()
 
 // CONSTANT VARIABLES
 const (
 	// heartbeating style (mode)
-	GOSSIP string = "GOSSIP"
+	GOSSIP     string = "GOSSIP"
 	ALL_TO_ALL string = "ALL_TO_ALL"
 
 	// status
 	CREATED string = "CREATED"
 	RUNNING string = "RUNNING"
-	FAILED string = "FAILED"
-	LEFT string = "LEFT"
+	FAILED  string = "FAILED"
+	LEFT    string = "LEFT"
 
 	// messageType
 	INITIALIZED string = "INITIALIZED"
-	HEARTBEAT string = "HEARTBEAT"
-	JOIN string = "JOIN"
-	LEAVE string = "LEAVE"
-	CHANGE string = "CHANGE"
+	HEARTBEAT   string = "HEARTBEAT"
+	JOIN        string = "JOIN"
+	LEAVE       string = "LEAVE"
+	CHANGE      string = "CHANGE"
 )
-
 
 // Message struct
 type Message struct {
-	MessageType string
-	Mode string // all to all or gossip
-	Hostname string // sender or the hostname that is marked failed
-	MembershipMap map[string] Member //sending the membership list, dereferenced so we can transfer the data
+	MessageType   string
+	Mode          string            // all to all or gossip
+	Hostname      string            // sender or the hostname that is marked failed
+	MembershipMap map[string]Member //sending the membership list, dereferenced so we can transfer the data
 	// MembershipList [] Member
+	// Changed int // time of mode change until this server
 }
 
 //Each Member
 type Member struct {
-	Id int
+	Id        int
 	Heartbeat int
-	Hostname string
-	Status string
+	Hostname  string
+	Status    string
 	Timestamp int32
 }
 
 //Current server
 type Server struct {
-	Id int
-	Hostname string
-	Port string
-	MembershipMap map[string] *Member
+	Id            int
+	Hostname      string
+	Port          string
+	MembershipMap map[string]*Member
 	// MembershipList [] *Member
 	Mode string
 }
-
-
-
 
 /**
 Main function
@@ -84,22 +81,21 @@ func main() {
 	// get host name of the current machine
 	hostname, err := os.Hostname()
 	if err != nil {
-		fmt.Printf("os.HostName() err");
+		fmt.Printf("os.HostName() err")
 	}
-
 
 	// setting up current server struct
 	var server_temp Server
-	server_temp.MembershipMap = make(map[string] *Member)
+	server_temp.MembershipMap = make(map[string]*Member)
 	// server_temp.MembershipList = [] *Member{}
 	server_temp.Hostname = hostname
 	server_temp.Port = PORT
 
 	for index, host := range NODES {
 		member := &Member{
-			Id: index, 
-			Hostname: host,
-			Status: CREATED,
+			Id:        index,
+			Hostname:  host,
+			Status:    CREATED,
 			Timestamp: getCurrentTime(),
 			Heartbeat: 0,
 		}
@@ -116,7 +112,6 @@ func main() {
 	// read command from the commandline
 	commandReader(server)
 
-	
 }
 
 /**
@@ -137,31 +132,31 @@ func commandReader(server *Server) {
 
 		//handling differnet commands
 		switch command {
-			// show memberlist
-			case "ls":
-				// if server.Mode == GOSSIP {
-				// 	for _, membership := range server.MembershipList {
-				// 		fmt.Printf("%v\n", membership)
-				// 	}
-				// } else {
-				// 	for _, membership := range server.MembershipMap {
-				// 		fmt.Printf("%v\n", membership)
-				// 	}
-				// }
-				for _, membership := range server.MembershipMap {
-					fmt.Printf("%v\n", membership)
-				}
-				
-			case "join":
-				join(server)
-			case "leave":
-				leave(server)
-			case "change":
-				change(server)
-				// changing heartbeat technique
-			case "id":
-				// show current id
-				fmt.Printf("Id for the current node is: %d\n", server.Id)
+		// show memberlist
+		case "ls":
+			// if server.Mode == GOSSIP {
+			// 	for _, membership := range server.MembershipList {
+			// 		fmt.Printf("%v\n", membership)
+			// 	}
+			// } else {
+			// 	for _, membership := range server.MembershipMap {
+			// 		fmt.Printf("%v\n", membership)
+			// 	}
+			// }
+			for _, membership := range server.MembershipMap {
+				fmt.Printf("%v\n", membership)
+			}
+
+		case "join":
+			join(server)
+		case "leave":
+			leave(server)
+		case "change":
+			change(server)
+			// changing heartbeat technique
+		case "id":
+			// show current id
+			fmt.Printf("Id for the current node is: %d\n", server.Id)
 		}
 	}
 }
@@ -173,7 +168,7 @@ func messageListener(server *Server) {
 	// get addrinfo
 	port_string, err := strconv.Atoi(server.Port)
 	addrinfo := net.UDPAddr{
-		IP: net.ParseIP(server.Hostname),
+		IP:   net.ParseIP(server.Hostname),
 		Port: port_string,
 	}
 
@@ -187,7 +182,7 @@ func messageListener(server *Server) {
 		bytes_read, err := socket.Read(resp)
 		if err != nil {
 			fmt.Printf("Error: Unable to read msg from socket. %s\n", err)
-		  continue
+			continue
 		}
 		// new go routine that handles processing the message
 		go messageHandler(server, resp, bytes_read)
@@ -216,20 +211,23 @@ func messageHandler(server *Server, resp []byte, bytes_read int) {
 		// Sent from a node to another node
 		if server.Mode == GOSSIP {
 			// need to merge
-			merge(server.MembershipMap, message.MembershipMap)
+			merge(server.MembershipMap, message.MembershipMap) //Q:Why do this? <- change status from created to () ?
 		} else {
 			// all to all
-			server.MembershipMap[message.Hostname].Heartbeat += 1
+			// server.MembershipMap[message.Hostname].Heartbeat += 1 :CHANGE, increment cnt when sending to ensure every node send only one heartbeat
 			server.MembershipMap[message.Hostname].Timestamp = getCurrentTime()
+			if server.MembershipMap[message.Hostname].Heartbeat < 1 { // TODO: clear this count after one round of heatbearting (in handle heartbeat function?)
+				sendHeartbeat(server)
+			}
 		}
 	} else if message.MessageType == INITIALIZED {
 		// Sent from the introducer to the new joined node
 		// receives a message of initialized; Only the new joined node is able to receive this
 		for _, membership := range message.MembershipMap {
 			member := &Member{
-				Id: membership.Id,
-				Hostname: membership.Hostname,
-				Status: membership.Status,
+				Id:        membership.Id,
+				Hostname:  membership.Hostname,
+				Status:    membership.Status,
 				Timestamp: membership.Timestamp,
 				Heartbeat: membership.Heartbeat,
 			}
@@ -244,15 +242,16 @@ func messageHandler(server *Server, resp []byte, bytes_read int) {
 		// sent from the introducer
 		// the introducer will always receive JOIN at first, it them disseminate to other nodes
 		if server.Hostname == INTRODUCER {
+			///Q: Introducer initialize every machine,instead of let them join on their own?
 			for _, hostname := range NODES {
-				socket, err := net.Dial("udp", hostname + ":" + PORT)
+				socket, err := net.Dial("udp", hostname+":"+PORT)
 				if err != nil {
 					fmt.Printf("Error: dialing UDP from introducer to normal nodes")
 				}
 				var message Message = Message{
-					MessageType: JOIN,
-					Mode: server.Mode,
-					Hostname: server.Hostname,
+					MessageType:   JOIN,
+					Mode:          server.Mode,
+					Hostname:      server.Hostname,
 					MembershipMap: dereferencedMemebershipMap(server.MembershipMap),
 				}
 
@@ -267,14 +266,14 @@ func messageHandler(server *Server, resp []byte, bytes_read int) {
 			}
 
 			// send the initialized data to the new joined node
-			socket, err := net.Dial("udp", message.Hostname + ":" + PORT)
+			socket, err := net.Dial("udp", message.Hostname+":"+PORT)
 			if err != nil {
 				fmt.Printf("Error: dialing UDP from introducer to new joined node")
 			}
 			var message Message = Message{
-				MessageType: INITIALIZED,
-				Mode: server.Mode,
-				Hostname: server.Hostname,
+				MessageType:   INITIALIZED,
+				Mode:          server.Mode,
+				Hostname:      server.Hostname,
 				MembershipMap: dereferencedMemebershipMap(server.MembershipMap),
 			}
 			//marshal the message to json
@@ -287,10 +286,14 @@ func messageHandler(server *Server, resp []byte, bytes_read int) {
 			}
 		}
 
-		
 		fmt.Printf("Finished handling join")
 
-		
+	} else if message.MessageType == CHANGE {
+		if server.Mode == GOSSIP {
+			server.Mode == ALL_TO_ALL
+		} else {
+			server.Mode == GOSSIP
+		}
 	}
 
 	return
@@ -300,14 +303,26 @@ func messageHandler(server *Server, resp []byte, bytes_read int) {
 SENDING & MONITORING HEARTBEATS
 */
 func sendHeartbeat(server *Server) {
-
+	if server.Mode == "GOSSIP" {
+		/*GOSSIP HEARTBEAT*/
+	} else {
+		/*ALL_TO_ALL_HEARTBEAT*/
+		server.MembershipMap[message.Hostname].Heartbeat += 1
+		sendRunning(server,HEARTBEAT)
+	}
 	return
 }
 
 func monitor(server *Server) {
-	return 
-}
+	if server.Mode == "GOSSIP" {
+		/*GOSSIP HEARTBEAT*/
+	} else {
+		/*ALL_TO_ALL_HEARTBEAT*/
+		//wait for all machine in group to send a ack, timeout =
 
+	}
+	return
+}
 
 /**
 JOINING & LEAVING THE GROUP
@@ -321,15 +336,15 @@ func join(server *Server) {
 
 	if server.Hostname != INTRODUCER {
 		// sending heatbeat by udp to other servers
-		socket, err := net.Dial("udp", INTRODUCER + ":" + PORT)
+		socket, err := net.Dial("udp", INTRODUCER+":"+PORT)
 		if err != nil {
 			fmt.Printf("Error: dialing UDP to introducer")
 		}
 
 		var message Message = Message{
-			MessageType: JOIN,
-			Mode: server.Mode,
-			Hostname: server.Hostname,
+			MessageType:   JOIN,
+			Mode:          server.Mode,
+			Hostname:      server.Hostname,
 			MembershipMap: dereferencedMemebershipMap(server.MembershipMap),
 		}
 
@@ -341,9 +356,9 @@ func join(server *Server) {
 		if err != nil {
 			fmt.Printf("Error: Writing JOIN message to the socket: %s", err)
 		}
-		
-		
+
 	}
+	// Q: Timing on send and monitor heartbeat?
 	go sendHeartbeat(server)
 	go monitor(server)
 }
@@ -360,14 +375,14 @@ func leave(server *Server) {
 	}
 
 	for _, hostname := range NODES {
-		socket, err := net.Dial("udp", hostname + ":" + PORT)
+		socket, err := net.Dial("udp", hostname+":"+PORT)
 		if err != nil {
 			fmt.Printf("Error: dialing UDP to introducer")
 		}
 		var message Message = Message{
-			MessageType: LEAVE,
-			Mode: server.Mode,
-			Hostname: server.Hostname,
+			MessageType:   LEAVE,
+			Mode:          server.Mode,
+			Hostname:      server.Hostname,
 			MembershipMap: dereferencedMemebershipMap(server.MembershipMap),
 		}
 
@@ -392,15 +407,22 @@ func leave(server *Server) {
 CHANGING HEATBEAING STYLE
 */
 func change(server *Server) {
-	return 
+	if server.Mode == GOSSIP {
+		server.Mode == ALL_TO_ALL
+	} else {
+		server.Mode == GOSSIP
+	}
+	sendRunning(server,CHANGE)
+	
+	return
 }
 
 /**
 UTILITY FUNCTIONS
 */
 
-func dereferencedMemebershipMap(membershipList map[string] *Member) map[string] Member{
-	var result map[string] Member
+func dereferencedMemebershipMap(membershipList map[string]*Member) map[string]Member {
+	var result map[string]Member
 	for key, member := range membershipList {
 		result[key] = *member
 	}
@@ -408,16 +430,16 @@ func dereferencedMemebershipMap(membershipList map[string] *Member) map[string] 
 }
 
 // merge two membershiplist (based on gossip)
-func merge(self map[string] *Member , other map[string] Member ) {
+func merge(self map[string]*Member, other map[string]Member) {
 	for key, member := range other {
-		if (member.Status == FAILED) {
+		if member.Status == FAILED {
 			self[key].Status = FAILED
 			continue
-		} else if (member.Status == LEFT) {
+		} else if member.Status == LEFT {
 			self[key].Status = LEFT
 			continue
 		} else {
-			if (member.Heartbeat > self[key].Heartbeat) {
+			if member.Heartbeat > self[key].Heartbeat {
 				self[key].Heartbeat = member.Heartbeat
 				self[key].Timestamp = getCurrentTime()
 			}
@@ -429,12 +451,12 @@ func marshalMsg(message Message) []byte {
 	//marshal the message to json
 	marshaledMsg, err := json.Marshal(message)
 	if err != nil {
-	  fmt.Printf("Error: Marshalling JOIN message: %s", err)
+		fmt.Printf("Error: Marshalling JOIN message: %s", err)
 	}
 	return marshaledMsg
 }
 
-func unmarshalMsg(jsonMsg []byte) Message{
+func unmarshalMsg(jsonMsg []byte) Message {
 	var message Message
 	err := json.Unmarshal(jsonMsg, &message)
 	if err != nil {
@@ -444,7 +466,7 @@ func unmarshalMsg(jsonMsg []byte) Message{
 }
 
 func makeNodes() [10]string {
-	var result [10]string;
+	var result [10]string
 	for idx, _ := range result {
 		var index int = idx + 1
 		if index < 10 {
@@ -457,5 +479,47 @@ func makeNodes() [10]string {
 }
 
 func getCurrentTime() int32 {
-	return int32(time.Now().Unix());
+	return int32(time.Now().Unix())
+}
+
+// TODO: Slow function 
+func findRunning(members map[string]*Member) int {
+	var result int 
+	var map[stirng]temp  =  dereferencedMemebershipMap(members)
+	for member := range temp{
+		if temp.status == RUNNING{
+			result ++
+		}
+	}
+	return result 
+}
+
+/*
+ * send a message of type msgType to all RUNNING member in membership list
+ */
+func sendRunning(server *Server, msgType string){
+	// TODO:EDGE CASE , Join while heartbeat ongoing in sytem
+	for hostname := range NODES {
+		if sever.MembershipMap[hostname].status == RUNNING{
+			socket, err := net.Dial("udp", hostname+":"+PORT)
+			if err != nil {
+				fmt.Printf("Error: dialing UDP from introducer to normal nodes")
+			}
+			var message Message = Message{
+				MessageType:   msgType,
+				Mode:          server.Mode,
+				Hostname:      server.Hostname,
+				MembershipMap: dereferencedMemebershipMap(server.MembershipMap),
+			}
+
+			//marshal the message to json
+			var marshaledMsg []byte = marshalMsg(message)
+
+			// write to the socket
+			_, err = socket.Write(marshaledMsg)
+			if err != nil {
+				fmt.Printf("Error: Writing JOIN message to the socket: %s", err)
+			}
+		}
+	}
 }
