@@ -19,15 +19,15 @@ var mutex sync.Mutex
 
 // CONFIG
 const (
-	INTRODUCER     string = "fa20-cs425-g35-01.cs.illinois.edu"
-	PORT           string = "14285"
-	NODE_CNT       int    = 10
-	GOSSIP_PARA    int    = 4                      // number of machine to gossip to at same time
-	TIMEOUT               = 100 * time.Millisecond //only have 6 second to finish heartbeat and update member list
-	GOSSIP_TIMEOUT        = 20 * time.Millisecond
-	BEAT_PERIOD           = 10 * time.Second
-	CLEANUP               = 100 * time.Millisecond
-	//TIEMOUT int = 200 time.Duration(Timeout) * Millisecond
+	INTRODUCER  string = "fa20-cs425-g35-01.cs.illinois.edu"
+	PORT        string = "14285"
+	NODE_CNT    int    = 10
+	GOSSIP_PARA int    = 4 // number of machine to gossip to at same time
+	// REVIEW : timing parameters
+	TIMEOUT        = 100 * time.Millisecond // timeour of all to all heartbeat
+	GOSSIP_TIMEOUT = 20 * time.Millisecond  // timeout of gossip style heartbeat
+	BEAT_PERIOD    = 10 * time.Second       // time interval between two heartbeat
+	CLEANUP        = 100 * time.Millisecond // gossip cleanup time before declare a node LEAVE
 )
 
 var NODES [NODE_CNT]string = makeNodes()
@@ -528,7 +528,7 @@ func makeNodes() [10]string {
 	return result
 }
 
-// TODO : .Unix is a int 64 value
+// TODO : .Unix is a int 64 value, this function is not utilized, change Timestamp to time.Now()
 func getCurrentTime() int32 {
 	return int32(time.Now().Unix())
 }
