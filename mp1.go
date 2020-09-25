@@ -20,8 +20,8 @@ var mutex sync.Mutex
 
 // CONFIG
 const (
-	INTRODUCER  string = "fa20-cs425-g35-01.cs.illinois.edu"
-	PORT        string = "14285"
+	// INTRODUCER  string = "fa20-cs425-g35-01.cs.illinois.edu"
+	INTRODUCER  string = "127.0.0.1:14285"
 	NODE_CNT    int    = 10
 	GOSSIP_PARA int    = 4 // number of machine to gossip to at same time
 	// REVIEW : timing parameters
@@ -32,7 +32,7 @@ const (
 )
 
 var NODES [NODE_CNT]string = makeNodes()
-
+var PORT string = "14285"
 // CONSTANT VARIABLES
 const (
 	// heartbeating style (mode)
@@ -97,10 +97,14 @@ Main function
 */
 func main() {
 	// get host name of the current machine
-	hostname, err := os.Hostname()
-	if err != nil {
-		log.Printf("os.HostName() err")
+	if len(os.Args) == 2 {
+		PORT = os.Args[1]
 	}
+	// hostname, err := os.Hostname()
+	// if err != nil {
+	// 	log.Printf("os.HostName() err")
+	// }
+	hostname := "127.0.0.1:" + PORT 
 
 	// setting up current server struct
 	var server_temp Server
@@ -148,7 +152,9 @@ func commandReader(server *Server) {
 		cmd := string(sentence)
 		s := strings.Split(cmd, " ")
 		command := string(bytes.Trim([]byte(s[0]), "\n"))
+		command = strings.TrimSpace(command)
 		fmt.Println("command: " + command)
+		fmt.Println(len(command))
 		fmt.Println(server.Hostname)
 
 		//handling differnet commands
@@ -234,7 +240,8 @@ func messageHandler(server *Server, resp []byte, bytes_read int) {
 		// the introducer will always receive JOIN at first, it them disseminate to other nodes
 		if server.Hostname == INTRODUCER {
 			for _, hostname := range NODES {
-				socket, err := net.Dial("udp", hostname+":"+PORT)
+				// socket, err := net.Dial("udp", hostname+":"+PORT)
+				socket, err := net.Dial("udp", hostname)
 				if err != nil {
 					log.Printf("Error: dialing UDP from introducer to normal nodes")
 				}
@@ -256,7 +263,9 @@ func messageHandler(server *Server, resp []byte, bytes_read int) {
 			}
 
 			// send the initialized data to the new joined node
-			socket, err := net.Dial("udp", message.Hostname+":"+PORT)
+			// socket, err := net.Dial("udp", message.Hostname+":"+PORT)
+			socket, err := net.Dial("udp", message.Hostname)
+
 			if err != nil {
 				log.Printf("Error: dialing UDP from introducer to new joined node")
 			}
@@ -351,7 +360,9 @@ func sendHeartbeat(server *Server) {
 		// }
 
 		for _, node := range rand_Nodes {
-			socket, err := net.Dial("udp", node+":"+PORT)
+			// socket, err := net.Dial("udp", node+":"+PORT)
+			socket, err := net.Dial("udp", node)
+
 			if err != nil {
 				log.Printf("Error: dialing UDP from introducer to normal nodes")
 			}
@@ -364,7 +375,7 @@ func sendHeartbeat(server *Server) {
 
 			//marshal the message to json
 			var marshaledMsg []byte = marshalMsg(message)
-			fmt.Println(string(marshaledMsg))
+			// fmt.Println(string(marshaledMsg))
 			// write to the socket
 			_, err = socket.Write(marshaledMsg)
 			if err != nil {
@@ -418,7 +429,7 @@ func monitor(server *Server) {
 		if server.Mode == GOSSIP {
 			for _, node := range server.MembershipMap {
 				// if running and time out
-				if node.Status == RUNNING && time.Now().Add(-GOSSIP_TIMEOUT).After(node.Timestamp) {
+				if node.Hostname != server.Hostname && node.Status == RUNNING && time.Now().Add(-GOSSIP_TIMEOUT).After(node.Timestamp) {
 					node.Status = SUSPECTED
 					suspected = append(suspected, node.Hostname)
 				} else if node.Status == SUSPECTED && time.Now().Add(-GOSSIP_TIMEOUT).Add(-CLEANUP).After(node.Timestamp) {
@@ -428,7 +439,7 @@ func monitor(server *Server) {
 			}
 		} else {
 			for _, node := range server.MembershipMap {
-				if time.Now().Add(-TIMEOUT).After(node.Timestamp) {
+				if node.Hostname != server.Hostname && node.Status == RUNNING && time.Now().Add(-TIMEOUT).After(node.Timestamp) {
 					node.Status = FAILED
 					failed = append(failed, node.Hostname)
 				}
@@ -456,13 +467,17 @@ JOINING & LEAVING THE GROUP
 // Join method: sends a UDP heartbeat to the introducer
 func join(server *Server) {
 	// mark the server to be running
+	fmt.Println("fuck")
+
 	mutex.Lock()
 	server.MembershipMap[server.Hostname].Status = RUNNING
 	mutex.Unlock()
 
 	if server.Hostname != INTRODUCER {
 		// sending heatbeat by udp to other servers
-		socket, err := net.Dial("udp", INTRODUCER+":"+PORT)
+		// socket, err := net.Dial("udp", INTRODUCER+":"+PORT)
+		socket, err := net.Dial("udp", INTRODUCER)
+
 		if err != nil {
 			log.Printf("Error: dialing UDP to introducer")
 		}
@@ -503,7 +518,9 @@ func leave(server *Server) {
 	}
 
 	for _, hostname := range NODES {
-		socket, err := net.Dial("udp", hostname+":"+PORT)
+		//socket, err := net.Dial("udp", hostname+":"+PORT)
+		socket, err := net.Dial("udp", hostname)
+
 		if err != nil {
 			log.Printf("Error: dialing UDP to introducer")
 		}
@@ -596,13 +613,16 @@ func unmarshalMsg(jsonMsg []byte) Message {
 
 func makeNodes() [10]string {
 	var result [10]string
+	// for idx, _ := range result {
+	// 	var index int = idx + 1
+	// 	if index < 10 {
+	// 		result[idx] = "fa20-cs425-g35-0" + strconv.Itoa(index) + ".cs.illinois.edu"
+	// 	} else {
+	// 		result[idx] = "fa20-cs425-g35-10.cs.illinois.edu"
+	// 	}
+	// }
 	for idx, _ := range result {
-		var index int = idx + 1
-		if index < 10 {
-			result[idx] = "fa20-cs425-g35-0" + strconv.Itoa(index) + ".cs.illinois.edu"
-		} else {
-			result[idx] = "fa20-cs425-g35-10.cs.illinois.edu"
-		}
+		result[idx] = "127.0.0.1:" + strconv.Itoa(14285 + idx)
 	}
 	return result
 }
@@ -617,8 +637,11 @@ func getCurrentTime() int32 {
  */
 func sendRunning(server *Server, msgType string, msgHostName string, msgDst []string) {
 	for hostname, _ := range msgDst {
+		//fmt.Println(*(server.MembershipMap[msgDst[hostname]]))
 		if server.MembershipMap[msgDst[hostname]].Status == RUNNING {
-			socket, err := net.Dial("udp", msgDst[hostname]+":"+PORT)
+			// socket, err := net.Dial("udp", msgDst[hostname]+":"+PORT)
+			socket, err := net.Dial("udp",  msgDst[hostname])
+
 			if err != nil {
 				log.Printf("Error: dialing UDP from introducer to normal nodes")
 			}
@@ -631,7 +654,7 @@ func sendRunning(server *Server, msgType string, msgHostName string, msgDst []st
 
 			//marshal the message to json
 			var marshaledMsg []byte = marshalMsg(message)
-			fmt.Println(string(marshaledMsg))
+			//fmt.Println(string(marshaledMsg))
 			// write to the socket
 			_, err = socket.Write(marshaledMsg)
 			if err != nil {
@@ -670,7 +693,6 @@ func timer(server *Server) {
 	// 	time.Sleep(BEAT_PERIOD)
 	// 	sendHeartbeat(server)
 	// }
-
 	interval := time.Tick(BEAT_PERIOD)
 	for range interval {
 		sendHeartbeat(server)
