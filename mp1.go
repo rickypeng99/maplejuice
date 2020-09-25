@@ -1,4 +1,4 @@
-package mp1
+package main
 
 import (
 	"bufio"
@@ -149,6 +149,7 @@ func commandReader(server *Server) {
 		s := strings.Split(cmd, " ")
 		command := string(bytes.Trim([]byte(s[0]), "\n"))
 		fmt.Println("command: " + command)
+		fmt.Println(server.Hostname)
 
 		//handling differnet commands
 		switch command {
@@ -335,6 +336,7 @@ func messageHandler(server *Server, resp []byte, bytes_read int) {
 SENDING & MONITORING HEARTBEATS
 */
 func sendHeartbeat(server *Server) {
+	fmt.Println("fuck")
 	if server.Mode == "GOSSIP" {
 		/*GOSSIP HEARTBEAT*/
 		//select a random receiver
@@ -362,7 +364,7 @@ func sendHeartbeat(server *Server) {
 
 			//marshal the message to json
 			var marshaledMsg []byte = marshalMsg(message)
-
+			fmt.Println(string(marshaledMsg))
 			// write to the socket
 			_, err = socket.Write(marshaledMsg)
 			if err != nil {
@@ -371,6 +373,7 @@ func sendHeartbeat(server *Server) {
 		}
 	} else {
 		/*ALL_TO_ALL_HEARTBEAT*/
+		fmt.Println(NODES[:])
 		sendRunning(server, HEARTBEAT, server.Hostname, NODES[:])
 	}
 	return
@@ -546,8 +549,9 @@ UTILITY FUNCTIONS
 */
 
 func dereferencedMemebershipMap(membershipList map[string]*Member) map[string]Member {
-	var result map[string]Member
+	result := make(map[string]Member)
 	for key, member := range membershipList {
+		fmt.Println(key)
 		result[key] = *member
 	}
 	return result
@@ -627,7 +631,7 @@ func sendRunning(server *Server, msgType string, msgHostName string, msgDst []st
 
 			//marshal the message to json
 			var marshaledMsg []byte = marshalMsg(message)
-
+			fmt.Println(string(marshaledMsg))
 			// write to the socket
 			_, err = socket.Write(marshaledMsg)
 			if err != nil {
