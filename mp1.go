@@ -409,9 +409,9 @@ func monitor(server *Server) {
 		}
 
 		// sending messages of failures and suspections
-		for _, failedNode := range failed {
-			sendRunning(server, FAILURE, failedNode, NODES[:])
-		}
+		// for _, failedNode := range failed {
+		// 	sendRunning(server, FAILURE, failedNode, NODES[:])
+		// }
 		time.Sleep(BEAT_PERIOD)
 	}
 
@@ -595,7 +595,7 @@ func sendRunning(server *Server, msgType string, msgHostName string, msgDst []st
 			socket, err := net.Dial("udp", msgDst[hostname])
 
 			if err != nil {
-				log.Printf("Error: dialing UDP from to : %s in sendRunning", server.Hostname)
+				log.Printf("Error: dialing UDP from to : %s in sendRunning", msgDst[hostname])
 			}
 			var message Message = Message{
 				MessageType:   msgType,
