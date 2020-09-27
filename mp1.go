@@ -25,10 +25,10 @@ const (
 	NODE_CNT    int = 10
 	GOSSIP_PARA int = 5 // number of machine to gossip to at same time
 	// REVIEW : timing parameters
-	TIMEOUT        = 5 * time.Second // timeour of all to all heartbeat
-	GOSSIP_TIMEOUT = 9 * time.Second // timeout of gossip style heartbeat
+	TIMEOUT        = 3 * time.Second // timeour of all to all heartbeat
+	GOSSIP_TIMEOUT = 3 * time.Second // timeout of gossip style heartbeat
 	BEAT_PERIOD    = 1 * time.Second // time interval between two heartbeat
-	CLEANUP        = 5 * time.Second // gossip cleanup time before declare a node LEAVE
+	CLEANUP        = 4 * time.Second // gossip cleanup time before declare a node LEAVE
 )
 
 var NODES [NODE_CNT]string = makeNodes()
