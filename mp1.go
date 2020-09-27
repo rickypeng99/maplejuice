@@ -103,7 +103,7 @@ func main() {
 		log.Printf("os.HostName() err")
 	}
 	// hostname := "127.0.0.1:" + PORT
-
+	fmt.Print(hostname)
 	// setting up current server struct
 	var server_temp Server
 	server_temp.MembershipMap = make(map[string]*Member)
