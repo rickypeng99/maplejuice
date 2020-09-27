@@ -180,14 +180,14 @@ LISTENINGN & HANDLING MESSAGES FROM OTHERS
 */
 func messageListener(server *Server) {
 	// get addrinfo
-	// port_string, err := strconv.Atoi(server.Port)
-	port_string, err := strconv.Atoi(PORT)
+	port_string, err := strconv.Atoi(server.Port)
+	// port_string, err := strconv.Atoi(PORT)
 
 	addrinfo := net.UDPAddr{
-		// IP:   net.ParseIP(server.Hostname),
-		// Port: port_string,
-		IP:   net.ParseIP("localhost"),
+		IP:   net.ParseIP(server.Hostname),
 		Port: port_string,
+		// IP:   net.ParseIP("localhost"),
+		// Port: port_string,
 	}
 
 	socket, err := net.ListenUDP("udp", &addrinfo)
