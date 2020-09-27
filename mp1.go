@@ -13,6 +13,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"errors"
 )
 
 //lock
@@ -26,7 +27,7 @@ const (
 	GOSSIP_PARA int = 5 // number of machine to gossip to at same time
 	// REVIEW : timing parameters
 	TIMEOUT        = 3 * time.Second // timeour of all to all heartbeat
-	GOSSIP_TIMEOUT = 3 * time.Second // timeout of gossip style heartbeat
+	GOSSIP_TIMEOUT = 5 * time.Second // timeout of gossip style heartbeat
 	BEAT_PERIOD    = 1 * time.Second // time interval between two heartbeat
 	CLEANUP        = 4 * time.Second // gossip cleanup time before declare a node LEAVE
 )
@@ -82,47 +83,62 @@ type Member struct {
 
 //Current server
 type Server struct {
-	Id            int
 	Hostname      string
 	Port          string
 	MembershipMap map[string]*Member
 	// MembershipList [] *Member
 	Mode string
+	Ip string
+	Timestamp string
 }
 
 /**
 Main function
 */
 func main() {
-	// get host name of the current machine
+
+	// logging file setup (we dont need this for demo)
+	// logF, err := os.OpenFile("membership.log", os.O_RDWR | os.O_CREATE, 0666)
+	// if err != nil {
+	// 	log.Println("Error: opening logging file")
+	// }
+	// defer logF.Close()
+	// log.SetOutput(logF)
+
+	// get port number from argument if there is one
 	if len(os.Args) == 2 {
 		PORT = os.Args[1]
 	}
+	// get host name of the current machine
 	hostname, err := os.Hostname()
 	if err != nil {
 		log.Printf("os.HostName() err")
 	}
+	// for local test
 	// hostname := "127.0.0.1:" + PORT
 	fmt.Print(hostname)
 	// setting up current server struct
 	var server_temp Server
 	server_temp.MembershipMap = make(map[string]*Member)
-	// server_temp.MembershipList = [] *Member{}
 	server_temp.Hostname = hostname
 	server_temp.Port = PORT
 	server_temp.Mode = GOSSIP
-
+	server_temp.Timestamp = time.Now().Format("2006-01-02 15:04:05")
+	ip, err := externalIP()
+	if err != nil {
+		log.Println("Error: getting external IP address")
+	}
+	server_temp.Ip = ip
+	
 	for index, host := range NODES {
 		member := &Member{
 			Id:        index,
 			Hostname:  host,
 			Status:    CREATED,
 			Timestamp: time.Now(),
-			// Timestamp: getCurrentTime(),
 			Heartbeat: 0,
 		}
 		server_temp.MembershipMap[host] = member
-		// server_temp.MembershipList = append(server_temp.MembershipList, member)
 	}
 
 	// server pointer that is used throughout the entire program
@@ -168,7 +184,7 @@ func commandReader(server *Server) {
 			// changing heartbeat technique
 		case "id":
 			// show current id
-			fmt.Printf("Id for the current node is: %d\n", server.Id)
+			fmt.Printf("Id for the current node is: %s%s\n", server.Ip, server.Timestamp)
 		case "mode":
 			fmt.Printf("Current Heartbeat Mode is: %v\n", server.Mode)
 		}
@@ -229,12 +245,11 @@ func messageHandler(server *Server, resp []byte, bytes_read int) {
 				Heartbeat: membership.Heartbeat,
 			}
 			server.MembershipMap[membership.Hostname] = member
-			// server.MembershipList = append(server.MembershipList, member)
 		}
 		server.MembershipMap[server.Hostname].Timestamp = time.Now()
 	} else if message.MessageType == JOIN {
 		server.MembershipMap[message.Hostname].Status = RUNNING
-		server.MembershipMap[message.Hostname].Timestamp = message.MembershipMap[message.Hostname].Timestamp
+		server.MembershipMap[message.Hostname].Timestamp = time.Now()
 		// sent from the introducer
 		// the introducer will always receive JOIN at first, it them disseminate to other nodes
 		if server.Hostname == INTRODUCER {
@@ -327,7 +342,7 @@ func messageHandler(server *Server, resp []byte, bytes_read int) {
 }
 
 /**
-SENDING & MONITORING HEARTBEATS
+SENDING HEARTBEATS
 */
 func sendHeartbeat(server *Server) {
 	if server.Mode == GOSSIP {
@@ -339,34 +354,10 @@ func sendHeartbeat(server *Server) {
 		})
 		rand_Nodes := temp[0:GOSSIP_PARA]
 		sendRunning(server, HEARTBEAT, server.Hostname, rand_Nodes)
-		// fmt.Println(rand_Nodes)
 
 		mutex.Lock()
 		server.MembershipMap[server.Hostname].Heartbeat += 1
 		server.MembershipMap[server.Hostname].Timestamp = time.Now()
-		// for _, node := range rand_Nodes {
-		// 	// socket, err := net.Dial("udp", node+":"+PORT)
-		// 	socket, err := net.Dial("udp", node)
-
-		// 	if err != nil {
-		// 		log.Printf("Error: dialing UDP from node: %s to : %s", server.Hostname, node)
-		// 	}
-		// 	var message Message = Message{
-		// 		MessageType:   HEARTBEAT,
-		// 		Mode:          server.Mode,
-		// 		Hostname:      server.Hostname,
-		// 		MembershipMap: dereferencedMemebershipMap(server.MembershipMap),
-		// 	}
-
-		// 	//marshal the message to json
-		// 	var marshaledMsg []byte = marshalMsg(message)
-		// 	// fmt.Println(string(marshaledMsg))
-		// 	// write to the socket
-		// 	_, err = socket.Write(marshaledMsg)
-		// 	if err != nil {
-		// 		log.Printf("Error: Writing JOIN message to the socket: %s", err)
-		// 	}
-		// }
 		mutex.Unlock()
 	} else {
 		/*ALL_TO_ALL_HEARTBEAT*/
@@ -385,6 +376,9 @@ func monitor(server *Server) {
 
 	interval := time.Tick(BEAT_PERIOD)
 	for range interval {
+		if server.MembershipMap[server.Hostname].Status == LEFT {
+			return
+		}
 		if server.Mode == GOSSIP {
 			for _, node := range server.MembershipMap {
 				// if running and time out
@@ -408,10 +402,6 @@ func monitor(server *Server) {
 			}
 		}
 
-		// sending messages of failures and suspections
-		// for _, failedNode := range failed {
-		// 	sendRunning(server, FAILURE, failedNode, NODES[:])
-		// }
 		time.Sleep(BEAT_PERIOD)
 	}
 
@@ -628,14 +618,10 @@ func heartBeatHandler(server *Server, message Message) {
 		merge(server.MembershipMap, message.MembershipMap)
 	} else {
 		// all to all
-		// server.MembershipMap[message.Hostname].Timestamp = getCurrentTime()
 		server.MembershipMap[message.Hostname].Timestamp = time.Now()
 		server.MembershipMap[message.Hostname].Heartbeat += 1
 		server.MembershipMap[message.Hostname].Status = RUNNING
 	}
-
-	// currently deciding to run monitor on an individual coroutine
-	// go monitor(server)
 }
 
 /*
@@ -644,6 +630,9 @@ func heartBeatHandler(server *Server, message Message) {
 func timer(server *Server) {
 	interval := time.Tick(BEAT_PERIOD)
 	for range interval {
+		if server.MembershipMap[server.Hostname].Status == LEFT {
+			return
+		}
 		sendHeartbeat(server)
 	}
 }
@@ -656,4 +645,44 @@ func getAllNodesButSelf(vs []string, server *Server) []string {
 		}
 	}
 	return vsf
+}
+
+/** get external ip address
+https://stackoverflow.com/questions/23558425/how-do-i-get-the-local-ip-address-in-go
+**/
+func externalIP() (string, error) {
+	ifaces, err := net.Interfaces()
+	if err != nil {
+		return "", err
+	}
+	for _, iface := range ifaces {
+		if iface.Flags&net.FlagUp == 0 {
+			continue // interface down
+		}
+		if iface.Flags&net.FlagLoopback != 0 {
+			continue // loopback interface
+		}
+		addrs, err := iface.Addrs()
+		if err != nil {
+			return "", err
+		}
+		for _, addr := range addrs {
+			var ip net.IP
+			switch v := addr.(type) {
+			case *net.IPNet:
+				ip = v.IP
+			case *net.IPAddr:
+				ip = v.IP
+			}
+			if ip == nil || ip.IsLoopback() {
+				continue
+			}
+			ip = ip.To4()
+			if ip == nil {
+				continue // not an ipv4 address
+			}
+			return ip.String(), nil
+		}
+	}
+	return "", errors.New("are you connected to the network?")
 }
