@@ -21,8 +21,8 @@ var mutex sync.Mutex
 
 // CONFIG
 const (
-	INTRODUCER string = "fa20-cs425-g35-01.cs.illinois.edu"
-	// INTRODUCER  string = "127.0.0.1:8000"
+	// INTRODUCER string = "fa20-cs425-g35-01.cs.illinois.edu"
+	INTRODUCER  string = "127.0.0.1:8000"
 	NODE_CNT    int = 10
 	GOSSIP_PARA int = 5 // number of machine to gossip to at same time
 	// REVIEW : timing parameters
@@ -34,6 +34,8 @@ const (
 
 var NODES [NODE_CNT]string = makeNodes()
 var PORT string = "8000"
+
+var bandwidth int = 0
 
 // CONSTANT VARIABLES
 const (
@@ -110,19 +112,19 @@ func main() {
 		PORT = os.Args[1]
 	}
 	// get host name of the current machine
-	hostname, err := os.Hostname()
-	if err != nil {
-		log.Printf("os.HostName() err")
-	}
+	// hostname, err := os.Hostname()
+	// if err != nil {
+	// 	log.Printf("os.HostName() err")
+	// }
 	// for local test
-	// hostname := "127.0.0.1:" + PORT
+	hostname := "127.0.0.1:" + PORT
 	fmt.Print(hostname)
 	// setting up current server struct
 	var server_temp Server
 	server_temp.MembershipMap = make(map[string]*Member)
 	server_temp.Hostname = hostname
 	server_temp.Port = PORT
-	server_temp.Mode = GOSSIP
+	server_temp.Mode = ALL_TO_ALL
 	server_temp.Timestamp = time.Now().Format("2006-01-02 15:04:05")
 	ip, err := externalIP()
 	if err != nil {
@@ -196,14 +198,14 @@ LISTENINGN & HANDLING MESSAGES FROM OTHERS
 */
 func messageListener(server *Server) {
 	// get addrinfo
-	port_string, err := strconv.Atoi(server.Port)
-	// port_string, err := strconv.Atoi(PORT)
+	// port_string, err := strconv.Atoi(server.Port)
+	port_string, err := strconv.Atoi(PORT)
 
 	addrinfo := net.UDPAddr{
-		IP:   net.ParseIP(server.Hostname),
-		Port: port_string,
-		// IP:   net.ParseIP("localhost"),
+		// IP:   net.ParseIP(server.Hostname),
 		// Port: port_string,
+		IP:   net.ParseIP("localhost"),
+		Port: port_string,
 	}
 
 	socket, err := net.ListenUDP("udp", &addrinfo)
@@ -257,8 +259,8 @@ func messageHandler(server *Server, resp []byte, bytes_read int) {
 				if hostname == server.Hostname || hostname == message.Hostname {
 					continue
 				}
-				socket, err := net.Dial("udp", hostname+":"+PORT)
-				// socket, err := net.Dial("udp", hostname)
+				// socket, err := net.Dial("udp", hostname+":"+PORT)
+				socket, err := net.Dial("udp", hostname)
 				if err != nil {
 					log.Printf("Error: dialing UDP from node: %s to new joined node", server.Hostname)
 				}
@@ -280,10 +282,13 @@ func messageHandler(server *Server, resp []byte, bytes_read int) {
 			}
 
 			// send the initialized data to the new joined node
-			socket, err := net.Dial("udp", message.Hostname+":"+PORT)
-			// socket, err := net.Dial("udp", message.Hostname)
+			// socket, err := net.Dial("udp", message.Hostname+":"+PORT)
+			socket, err := net.Dial("udp", message.Hostname)
 			log.Printf("%s has successfully joined the group", message.Hostname)
-
+			if (message.Hostname == "127.0.0.1:8002") {
+				//test bandwidth
+				go testBandWidth()
+			}
 			if err != nil {
 				log.Printf("Error: dialing UDP from node: %s to : %s when sending initialized data", server.Hostname, message.Hostname)
 			}
@@ -419,8 +424,8 @@ func join(server *Server) {
 
 	if server.Hostname != INTRODUCER {
 		// sending heatbeat by udp to other servers
-		socket, err := net.Dial("udp", INTRODUCER+":"+PORT)
-		// socket, err := net.Dial("udp", INTRODUCER)
+		// socket, err := net.Dial("udp", INTRODUCER+":"+PORT)
+		socket, err := net.Dial("udp", INTRODUCER)
 
 		if err != nil {
 			log.Printf("Error: dialing UDP to introducer")
@@ -460,8 +465,8 @@ func leave(server *Server) {
 	}
 
 	for _, hostname := range NODES {
-		socket, err := net.Dial("udp", hostname+":"+PORT)
-		// socket, err := net.Dial("udp", hostname)
+		// socket, err := net.Dial("udp", hostname+":"+PORT)
+		socket, err := net.Dial("udp", hostname)
 
 		if err != nil {
 			log.Printf("Error: dialing UDP to introducer")
@@ -559,18 +564,18 @@ func unmarshalMsg(jsonMsg []byte) Message {
 
 func makeNodes() [10]string {
 	var result [10]string
-	for idx, _ := range result {
-		var index int = idx + 1
-		if index < 10 {
-			result[idx] = "fa20-cs425-g35-0" + strconv.Itoa(index) + ".cs.illinois.edu"
-		} else {
-			result[idx] = "fa20-cs425-g35-10.cs.illinois.edu"
-		}
-	}
-	// for local test
 	// for idx, _ := range result {
-	// 	result[idx] = "127.0.0.1:" + strconv.Itoa(8000+idx)
+	// 	var index int = idx + 1
+	// 	if index < 10 {
+	// 		result[idx] = "fa20-cs425-g35-0" + strconv.Itoa(index) + ".cs.illinois.edu"
+	// 	} else {
+	// 		result[idx] = "fa20-cs425-g35-10.cs.illinois.edu"
+	// 	}
 	// }
+	// for local test
+	for idx, _ := range result {
+		result[idx] = "127.0.0.1:" + strconv.Itoa(8000+idx)
+	}
 	return result
 }
 
@@ -582,8 +587,8 @@ func sendRunning(server *Server, msgType string, msgHostName string, msgDst []st
 		// fmt.Println(*(server.MembershipMap[msgDst[hostname]]))
 		// fmt.Printf("sending a msg type: %v in sendrunning", msgType)
 		if server.Hostname != msgDst[hostname] && server.MembershipMap[msgDst[hostname]].Status == RUNNING {
-			socket, err := net.Dial("udp", msgDst[hostname]+":"+PORT)
-			// socket, err := net.Dial("udp", msgDst[hostname])
+			// socket, err := net.Dial("udp", msgDst[hostname]+":"+PORT)
+			socket, err := net.Dial("udp", msgDst[hostname])
 
 			if err != nil {
 				log.Printf("Error: dialing UDP from to : %s in sendRunning", msgDst[hostname])
@@ -597,6 +602,7 @@ func sendRunning(server *Server, msgType string, msgHostName string, msgDst []st
 
 			//marshal the message to json
 			var marshaledMsg []byte = marshalMsg(message)
+			bandwidth += len(marshaledMsg)
 			// fmt.Println(string(marshaledMsg))
 			// write to the socket
 			_, err = socket.Write(marshaledMsg)
@@ -685,4 +691,9 @@ func externalIP() (string, error) {
 		}
 	}
 	return "", errors.New("are you connected to the network?")
+}
+
+func testBandWidth() {
+	time.Sleep(10 * time.Second)
+	fmt.Printf("Bandwidth is %d\n", bandwidth)
 }
