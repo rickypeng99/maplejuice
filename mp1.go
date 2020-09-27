@@ -20,10 +20,10 @@ var mutex sync.Mutex
 
 // CONFIG
 const (
-	// INTRODUCER  string = "fa20-cs425-g35-01.cs.illinois.edu"
-	INTRODUCER  string = "127.0.0.1:8000"
-	NODE_CNT    int    = 10
-	GOSSIP_PARA int    = 5 // number of machine to gossip to at same time
+	INTRODUCER string = "fa20-cs425-g35-01.cs.illinois.edu"
+	// INTRODUCER  string = "127.0.0.1:8000"
+	NODE_CNT    int = 10
+	GOSSIP_PARA int = 5 // number of machine to gossip to at same time
 	// REVIEW : timing parameters
 	TIMEOUT        = 5 * time.Second // timeour of all to all heartbeat
 	GOSSIP_TIMEOUT = 9 * time.Second // timeout of gossip style heartbeat
@@ -98,11 +98,11 @@ func main() {
 	if len(os.Args) == 2 {
 		PORT = os.Args[1]
 	}
-	// hostname, err := os.Hostname()
-	// if err != nil {
-	// 	log.Printf("os.HostName() err")
-	// }
-	hostname := "127.0.0.1:" + PORT
+	hostname, err := os.Hostname()
+	if err != nil {
+		log.Printf("os.HostName() err")
+	}
+	// hostname := "127.0.0.1:" + PORT
 
 	// setting up current server struct
 	var server_temp Server
@@ -569,17 +569,18 @@ func unmarshalMsg(jsonMsg []byte) Message {
 
 func makeNodes() [10]string {
 	var result [10]string
-	// for idx, _ := range result {
-	// 	var index int = idx + 1
-	// 	if index < 10 {
-	// 		result[idx] = "fa20-cs425-g35-0" + strconv.Itoa(index) + ".cs.illinois.edu"
-	// 	} else {
-	// 		result[idx] = "fa20-cs425-g35-10.cs.illinois.edu"
-	// 	}
-	// }
 	for idx, _ := range result {
-		result[idx] = "127.0.0.1:" + strconv.Itoa(8000+idx)
+		var index int = idx + 1
+		if index < 10 {
+			result[idx] = "fa20-cs425-g35-0" + strconv.Itoa(index) + ".cs.illinois.edu"
+		} else {
+			result[idx] = "fa20-cs425-g35-10.cs.illinois.edu"
+		}
 	}
+	// for local test
+	// for idx, _ := range result {
+	// 	result[idx] = "127.0.0.1:" + strconv.Itoa(8000+idx)
+	// }
 	return result
 }
 
