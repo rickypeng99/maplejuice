@@ -242,8 +242,8 @@ func messageHandler(server *Server, resp []byte, bytes_read int) {
 				if hostname == server.Hostname || hostname == message.Hostname {
 					continue
 				}
-				// socket, err := net.Dial("udp", hostname+":"+PORT)
-				socket, err := net.Dial("udp", hostname)
+				socket, err := net.Dial("udp", hostname+":"+PORT)
+				// socket, err := net.Dial("udp", hostname)
 				if err != nil {
 					log.Printf("Error: dialing UDP from node: %s to new joined node", server.Hostname)
 				}
@@ -265,8 +265,8 @@ func messageHandler(server *Server, resp []byte, bytes_read int) {
 			}
 
 			// send the initialized data to the new joined node
-			// socket, err := net.Dial("udp", message.Hostname+":"+PORT)
-			socket, err := net.Dial("udp", message.Hostname)
+			socket, err := net.Dial("udp", message.Hostname+":"+PORT)
+			// socket, err := net.Dial("udp", message.Hostname)
 			log.Printf("%s has successfully joined the group", message.Hostname)
 
 			if err != nil {
@@ -429,8 +429,8 @@ func join(server *Server) {
 
 	if server.Hostname != INTRODUCER {
 		// sending heatbeat by udp to other servers
-		// socket, err := net.Dial("udp", INTRODUCER+":"+PORT)
-		socket, err := net.Dial("udp", INTRODUCER)
+		socket, err := net.Dial("udp", INTRODUCER+":"+PORT)
+		// socket, err := net.Dial("udp", INTRODUCER)
 
 		if err != nil {
 			log.Printf("Error: dialing UDP to introducer")
@@ -470,8 +470,8 @@ func leave(server *Server) {
 	}
 
 	for _, hostname := range NODES {
-		//socket, err := net.Dial("udp", hostname+":"+PORT)
-		socket, err := net.Dial("udp", hostname)
+		socket, err := net.Dial("udp", hostname+":"+PORT)
+		// socket, err := net.Dial("udp", hostname)
 
 		if err != nil {
 			log.Printf("Error: dialing UDP to introducer")
@@ -592,8 +592,8 @@ func sendRunning(server *Server, msgType string, msgHostName string, msgDst []st
 		// fmt.Println(*(server.MembershipMap[msgDst[hostname]]))
 		// fmt.Printf("sending a msg type: %v in sendrunning", msgType)
 		if server.Hostname != msgDst[hostname] && server.MembershipMap[msgDst[hostname]].Status == RUNNING {
-			// socket, err := net.Dial("udp", msgDst[hostname]+":"+PORT)
-			socket, err := net.Dial("udp", msgDst[hostname])
+			socket, err := net.Dial("udp", msgDst[hostname]+":"+PORT)
+			// socket, err := net.Dial("udp", msgDst[hostname])
 
 			if err != nil {
 				log.Printf("Error: dialing UDP from to : %s in sendRunning", msgDst[hostname])
