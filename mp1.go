@@ -209,7 +209,7 @@ func messageListener(server *Server) {
 
 func messageHandler(server *Server, resp []byte, bytes_read int) {
 	message := unmarshalMsg([]byte(string(resp[:bytes_read])))
-	log.Printf("Received message type :%v from host:%v", message.MessageType, message.Hostname)
+	// log.Printf("Received message type :%v from host:%v", message.MessageType, message.Hostname)
 	if message.Mode != server.Mode && message.MessageType != CHANGE {
 		// ignore packets from different mode
 		return
@@ -589,8 +589,8 @@ func makeNodes() [10]string {
  */
 func sendRunning(server *Server, msgType string, msgHostName string, msgDst []string) {
 	for hostname, _ := range msgDst {
-		fmt.Println(*(server.MembershipMap[msgDst[hostname]]))
-		fmt.Printf("sending a msg type: %v in sendrunning", msgType)
+		// fmt.Println(*(server.MembershipMap[msgDst[hostname]]))
+		// fmt.Printf("sending a msg type: %v in sendrunning", msgType)
 		if server.Hostname != msgDst[hostname] && server.MembershipMap[msgDst[hostname]].Status == RUNNING {
 			// socket, err := net.Dial("udp", msgDst[hostname]+":"+PORT)
 			socket, err := net.Dial("udp", msgDst[hostname])
