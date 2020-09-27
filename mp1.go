@@ -209,7 +209,7 @@ func messageListener(server *Server) {
 
 func messageHandler(server *Server, resp []byte, bytes_read int) {
 	message := unmarshalMsg([]byte(string(resp[:bytes_read])))
-	// log.Printf("Received message type :%v from host:%v", message.MessageType, message.Hostname)
+	log.Printf("Received message type :%v from host:%v", message.MessageType, message.Hostname)
 	if message.Mode != server.Mode && message.MessageType != CHANGE {
 		// ignore packets from different mode
 		return
@@ -299,7 +299,8 @@ func messageHandler(server *Server, resp []byte, bytes_read int) {
 	} else if message.MessageType == LEAVE {
 		server.MembershipMap[message.Hostname].Status = LEFT
 		log.Printf("%s has left \n", message.Hostname)
-	} else if message.MessageType == FAILURE {
+	} else if message.MessageType == FAILURE && message.Hostname != server.Hostname {
+		log.Printf("node %s has failed", message.Hostname)
 		if server.MembershipMap[message.Hostname].Status == FAILED || server.MembershipMap[message.Hostname].Status == FAILED_REMOVAL {
 			return
 		} else if server.MembershipMap[message.Hostname].Status == RUNNING {
@@ -332,7 +333,6 @@ func sendHeartbeat(server *Server) {
 	if server.Mode == GOSSIP {
 		/*GOSSIP HEARTBEAT*/
 		//select a random receiver
-		// TODO : make sure only send to living nodes
 		var temp []string = getAllNodesButSelf(NODES[:], server)
 		rand.Shuffle(len(temp), func(i, j int) {
 			temp[i], temp[j] = temp[j], temp[i]
@@ -589,7 +589,7 @@ func makeNodes() [10]string {
 func sendRunning(server *Server, msgType string, msgHostName string, msgDst []string) {
 	for hostname, _ := range msgDst {
 		fmt.Println(*(server.MembershipMap[msgDst[hostname]]))
-		fmt.PRintf("sending a msg type: %v in sendrunning" msgType)
+		fmt.Printf("sending a msg type: %v in sendrunning", msgType)
 		if server.Hostname != msgDst[hostname] && server.MembershipMap[msgDst[hostname]].Status == RUNNING {
 			// socket, err := net.Dial("udp", msgDst[hostname]+":"+PORT)
 			socket, err := net.Dial("udp", msgDst[hostname])
