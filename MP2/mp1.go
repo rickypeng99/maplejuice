@@ -118,6 +118,15 @@ func start_failure_detector() {
 	// hostname := "127.0.0.1:" + PORT
 	fmt.Print(hostname)
 	// setting up current server struct
+	server := init_membership_server(hostname, PORT)
+	//make the server listening to the port
+	go messageListener(server)
+	// read command from the commandline
+	commandReader(server)
+
+}
+
+func init_membership_server(hostname string, PORT string) *Server{
 	var server_temp Server
 	server_temp.MembershipMap = make(map[string]*Member)
 	server_temp.Hostname = hostname
@@ -143,12 +152,7 @@ func start_failure_detector() {
 
 	// server pointer that is used throughout the entire program
 	var server *Server = &server_temp
-
-	//make the server listening to the port
-	go messageListener(server)
-	// read command from the commandline
-	commandReader(server)
-
+	return server
 }
 
 /**
