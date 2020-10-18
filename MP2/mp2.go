@@ -14,6 +14,7 @@ import (
 	"time"
 	"errors"
 	"hash/fnv"
+	"os/exec"
 )
 
 var FS_PORT string = "8001"
@@ -25,6 +26,9 @@ var REPLICA_MAX int = 4
 
 var fs_server *FSserver
 var membership_server *Server
+
+var sdfs_folder_path = os.Getenv("HOME") + "/cs425/MP2/sdfsFiles"
+var local_folder_path = os.Getenv("HOME") + "/cs425/MP2/localFiles"
 
 // FS Message struct
 type FSmessage struct {
@@ -39,7 +43,7 @@ type FSmessage struct {
 type FSserver struct {
 	Hostname string
 	Port string
-	Files map[string]string // for a current server show show if it has a replica of a file
+	Files map[string]int // for a current server show show if it has a replica of a file, 1 yes, 0 no
 }
 
 // only used for master node
@@ -56,15 +60,21 @@ const (
 	REPLICATE string = "REPLICATE" // master -> other nodes
 	REPLICATE_COMPLETE string = "REPLICATE_COMPLETE" // replica nodes -> master
 	REPLICATE_RM string = "REPLICATE_RM"
+	RE_REPLICATE string = "RE_REPLICATE"
 
 	// FS MESSAGE
 	PUT string = "PUT" // nodes -> master
 	// PUT_ACK string = "PUT_ACK" // a node has successfully replicated the file
 	GET string = "GET" // nodes -> master
+	DELETE string = "DELETE" // nodes -> master
+	FS_FAILED string = "FS_FAILED" // master -> master; re selecting the replicas 
 	GET_WAIT string = "GET_WAIT" // There is a read/write conflict, the client needs to wait for the result
 	GET_ACK string = "GET_ACK" // The master has responded the GET request, and we can scp right now
 
-	DELETE string = "DELETE" // nodes -> master
+	// show
+	SHOW string = "SHOW" // node -> master getting the list of machines that a file is at
+	SHOW_ACK string = "SHOW_ACK" // master -> node sending the list info
+
 
 )
 
@@ -166,7 +176,7 @@ func fsCommandReader(fs_server *FSserver, membership_server *Server) {
 				fmt.Println("Please input <sdfsfilename>")
 				sentence, err = reader.ReadBytes('\n')
 				if err != nil {
-					log.Printf("command read error!")
+					fmt.Printf("command read error! delete\n")
 				}
 				fileInfos := string(sentence)
 				sdfsFilename := strings.TrimSpace(fileInfos)
@@ -174,11 +184,25 @@ func fsCommandReader(fs_server *FSserver, membership_server *Server) {
 				send_to_master(fs_server, "", sdfsFilename, DELETE)
 			case "store":
 				// Show the files that has replicas been assigned to current node
-			case "replicas":
+				fmt.Println("The following files in the FS have replicas at this node:")
+				count := 1
+				for key, value := range fs_server.Files {
+					if value == 1 {
+						fmt.Printf("%d. %s", count, key)
+					}
+					count++
+				}
+			case "show":
 				// Show the replicas of <sdfsfilename>
+				fmt.Println("Please input <sdfsfilename>")
+				sentence, err = reader.ReadBytes('\n')
+				if err != nil {
+					fmt.Printf("command read error! show\n")
+				}
+				fileInfos := string(sentence)
+				sdfsFilename := strings.TrimSpace(fileInfos)
+				send_to_master(fs_server, "", sdfsFilename, SHOW)
 		}
-
-		// TODO: commands for mp2
 	}
 }
 
@@ -188,7 +212,7 @@ func init_fs_server(hostname string, FS_PORT string) *FSserver{
 	var server_temp FSserver
 	server_temp.Hostname = hostname
 	server_temp.Port = FS_PORT
-	server_temp.Files = make(map[string]string)
+	server_temp.Files = make(map[string]int)
 
 	// server pointer that is used throughout the entire program
 	var server *FSserver = &server_temp
@@ -239,6 +263,7 @@ func fsMessageHandler(server *FSserver, resp []byte, bytes_read int, membership_
 		// TODO: commands that only the master node will be handling
 		switch message.MessageType {
 			case PUT:
+				// TODO: change the local file name to local absolute path
 				isProgressingFilePUT[message.SdfsFilename] = 1
 				var replicas []string
 				if existed_replicas, ok := fileDirectory[message.SdfsFilename]; ok {
@@ -307,17 +332,36 @@ func fsMessageHandler(server *FSserver, resp []byte, bytes_read int, membership_
 						send_to(message.Hostname, replica, server, message.LocalFilename, message.SdfsFilename, REPLICATE_RM)
 					}
 				}
+			
+			case FS_FAILED:
+				// TODO
+			case SHOW
+				// TODO
 		}
 	}
 	// commands that all nodes will be handling
 	switch message.MessageType {
 		case REPLICATE:
 			// TODO
+			// localFilename will be the absolute path of the file at that node
+			fromPath := message.Info_Hostname + ":" + message.LocalFilename
+			dstPath := message.Info_Hostname + ":" + sdfs_folder_path + message.SdfsFilename
+			cmd := exec.Command("scp", fromPath, dstPath)
+			fmt.Println(cmd)
+			err := cmd.Run()
+			if err != nil {
+				fmt.Printf("Error: running scp from %s\n", message.Info_Hostname)
+				break
+			}
+			send_to_master(fs_server, message.LocalFilename, message.SdfsFilename, REPLICATE_COMPLETE)
+			
 		case REPLICATE_RM:
 			// TODO
 		case GET_ACK:
 			// TODO
 		case GET_WAIT:
+			// TODO
+		case SHOW_ACK:
 			// TODO
 	}
 }
@@ -384,7 +428,33 @@ func send_to(dstHostname string, stHostname string, server *FSserver, localFilen
 	}
 }
 
-// UTILITY FUNCTIONS
+/**
+* send a message about failures to myself 
+*/
+func send_to_myself(server *Server, failedNode string, msgType string) {
+	socket, err := net.Dial("udp", server.Hostname+":"+FS_PORT)
+	// socket, err := net.Dial("udp", INTRODUCER)
+	if err != nil {
+		fmt.Printf("Error: dialing UDP to master : %s\n", msgType)
+	}
+	var message FSmessage = FSmessage{
+		MessageType:   msgType,
+		Hostname:      server.Hostname,
+		Info_Hostname: failedNode,
+		LocalFilename: "",
+		SdfsFilename:  "",
+	}
+	//marshal the message to json
+	var marshaledMsg []byte = marshalFSmsg(message)
+
+	// write to the socket
+	_, err = socket.Write(marshaledMsg)
+	if err != nil {
+		fmt.Printf("Error: Writing %s message to the master node: %s\n", msgType, err)
+	}
+}
+
+// ------------------------------------------UTILITY FUNCTIONS---------------------------------------------
 func marshalFSmsg(message FSmessage) []byte {
 	//marshal the message to json
 	marshaledMsg, err := json.Marshal(message)
@@ -422,4 +492,12 @@ func getReplicas(main_node int) []string {
 		}
 	}
 	return result
+}
+
+func getKeysFromMap(m map[string]int) []string {
+	keys := []string{}
+    for k := range m {
+        keys = append(keys, k)
+	}
+	return keys
 }

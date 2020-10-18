@@ -392,6 +392,10 @@ func monitor(server *Server) {
 					log.Printf("Failure captured (Gossip): %s\n", node.Hostname)
 				} else if node.Status == FAILED && time.Now().Add(-GOSSIP_TIMEOUT).Add(-CLEANUP).After(node.Timestamp) {
 					node.Status = FAILED_REMOVAL
+					// if master node - send a FS_FAILED message to itself; removing the failed nodes and re replicate
+					if server.Hostname == INTRODUCER {
+						send_to_myself(server, node.Hostname, FS_FAILED)
+					}
 					log.Printf("Failure removed (Gossip): %s\n", node.Hostname)
 				}
 			}
@@ -401,6 +405,9 @@ func monitor(server *Server) {
 				if node.Hostname != server.Hostname && node.Status == RUNNING && time.Now().Add(-TIMEOUT).After(node.Timestamp) {
 					node.Status = FAILED
 					failed = append(failed, node.Hostname)
+					if server.Hostname == INTRODUCER {
+						send_to_myself(server, node.Hostname, FS_FAILED)
+					}
 					log.Printf("Failure captured (All to all): %s\n", node.Hostname)
 				}
 			}
