@@ -11,6 +11,7 @@ import (
 	"strings"
 	"hash/fnv"
 	"os/exec"
+	"math/rand"
 )
 
 var FS_PORT string = "8001"
@@ -350,15 +351,33 @@ func fsMessageHandler(server *FSserver, resp []byte, bytes_read int, membership_
 				}
 
 				// find new replications
-				// TODO: re select (randomly maybe) the replica
+				// For each file, randomly select a new replica node and make it scp to a random node that has the replica
+				start_pick_array := []string{}
+				dst_pick_array := []string{}
 				for _, file := range filesNeedsToReplicated {
 					var alive_replicas []string
-					for index, replica := range fileDirectory[file] {
+					// get all nodes that have the same file
+					for _, replica := range fileDirectory[file] {
 						// prevent if this node has failed as well
 						if membership_server.MembershipMap[replica].Status != FAILED_REMOVAL {
-							// alive_replicas = append()
+							alive_replicas = append(alive_replicas, replica)
 						}
 					}
+					// get all nodes that doesn't have the file, could be used as replicate (also it is not failed)
+					available_replicas := filter_by_non_replica(membership_server, alive_replicas)
+					
+					// randomly pick start & destination
+					random_start_index := rand.Intn(len(alive_replicas))
+					random_dst_Index := rand.Intn(len(available_replicas))
+					start_pick_array = append(start_pick_array, alive_replicas[random_start_index])	
+					dst_pick_array = append(dst_pick_array, available_replicas[random_dst_Index])		
+				}
+
+				for index, startNode := range start_pick_array {
+					dstNode := dst_pick_array[index]
+					file := filesNeedsToReplicated[index]
+					// TODO this needs to be re-replicate, therefore we need to fetch from sdfs folder to another sdfs folder
+					send_to(dstNode, startNode, fs_server, file, file, REPLICATE)
 				}
 
 
@@ -539,4 +558,26 @@ func getKeysFromMap(m map[string]int) []string {
         keys = append(keys, k)
 	}
 	return keys
+}
+
+// functions that are used to filter
+// get all node that are not storing replica of a file
+func filter_by_non_replica(membership_server *Server, active_replicas []string) []string{
+	var result []string
+	for _, node := range NODES {
+		if membership_server.MembershipMap[node].Status == FAILED_REMOVAL {
+			continue
+		}
+		flag := 1
+		for _, replica := range active_replicas {
+			if replica == node {
+				flag = 0
+				break
+			}
+		}
+		if flag == 1 {
+			result = append(result, node)
+		}
+	}
+	return result
 }
