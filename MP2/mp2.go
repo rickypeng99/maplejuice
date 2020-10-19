@@ -5,14 +5,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
-	"math/rand"
 	"net"
 	"os"
 	"strconv"
 	"strings"
-	"sync"
-	"time"
-	"errors"
 	"hash/fnv"
 	"os/exec"
 )
@@ -201,6 +197,7 @@ func fsCommandReader(fs_server *FSserver, membership_server *Server) {
 				}
 				fileInfos := string(sentence)
 				sdfsFilename := strings.TrimSpace(fileInfos)
+				fmt.Printf("Retrieving replica positions for %s\n", sdfsFilename)
 				send_to_master(fs_server, "", sdfsFilename, SHOW)
 		}
 	}
@@ -283,6 +280,9 @@ func fsMessageHandler(server *FSserver, resp []byte, bytes_read int, membership_
 					}
 					replicas = getReplicas(main_node)
 				}
+				
+				// (re)intialize the replicas recording of current file: refill them after receiving REPLICATE_COMPLETE
+				fileDirectory[message.SdfsFilename] = []string{}
 
 				// send replicas message to the servers that need to update
 				for _, replica := range replicas {
@@ -292,13 +292,11 @@ func fsMessageHandler(server *FSserver, resp []byte, bytes_read int, membership_
 			// replica -> master saying that it has replicated the file
 			case REPLICATE_COMPLETE:
 				// add replica to the fileDirectory
-				fileDirectory[message.Hostname] = append(fileDirectory[message.Hostname], message.Hostname)
+				fileDirectory[message.SdfsFilename] = append(fileDirectory[message.SdfsFilename], message.Hostname)
 				fmt.Printf("Hostname: %s has successfully replicated sdfsfile - %s\n", message.Hostname, message.SdfsFilename)
-				if val, ok := isProgressingFilePUT[message.SdfsFilename]; ok {
+				if val, ok := isProgressingFilePUT[message.SdfsFilename]; ok && val == 1 {
 					// stop being in progress
-					if val == 1 {
-						isProgressingFilePUT[message.SdfsFilename] = 0
-					}
+					isProgressingFilePUT[message.SdfsFilename] = 0
 				}
 				// sending GET_ACK back to hold get requests
 				if requests, present := getQueue[message.SdfsFilename]; present {
@@ -310,7 +308,7 @@ func fsMessageHandler(server *FSserver, resp []byte, bytes_read int, membership_
 				delete(getQueue, message.SdfsFilename)
 			
 			case GET:
-				if val, ok := isProgressingFilePUT[message.SdfsFilename]; val == 1 {
+				if val, ok := isProgressingFilePUT[message.SdfsFilename]; ok && val == 1 {
 					// file is still in progress
 					fmt.Printf("Hostname %s has tried to GET sdfsfile %s, but it is still being PUT\n", message.Hostname, message.SdfsFilename)
 					send_to(message.Hostname, message.Hostname, server, message.LocalFilename, message.SdfsFilename, GET_WAIT)
@@ -332,53 +330,94 @@ func fsMessageHandler(server *FSserver, resp []byte, bytes_read int, membership_
 						send_to(message.Hostname, replica, server, message.LocalFilename, message.SdfsFilename, REPLICATE_RM)
 					}
 				}
+				delete(fileDirectory, message.SdfsFilename)
 			
 			case FS_FAILED:
-				// TODO
-			case SHOW
-				// TODO
+				// delete the records of this node holding a replica
+				// record the files that need to find new replicas
+				filesNeedsToReplicated := []string{}
+				for key := range fileDirectory {
+					for index, replica := range fileDirectory[key] {
+						temp := fileDirectory[key]
+						if replica == message.Info_Hostname {
+							filesNeedsToReplicated = append(filesNeedsToReplicated, key)
+							fileDirectory[key][index] = temp[len(temp) - 1]
+							fileDirectory[key][len(temp) - 1] = ""
+							fileDirectory[key] = fileDirectory[key][:len(temp) - 1]
+							break
+						}
+					}
+				}
+
+				// find new replications
+				// TODO: re select (randomly maybe) the replica
+				for _, file := range filesNeedsToReplicated {
+					var alive_replicas []string
+					for index, replica := range fileDirectory[file] {
+						// prevent if this node has failed as well
+						if membership_server.MembershipMap[replica].Status != FAILED_REMOVAL {
+							// alive_replicas = append()
+						}
+					}
+				}
+
+
+			case SHOW:
+				// send the replica info back to node
+				var replicas []string
+				if existed_replicas, ok := fileDirectory[message.SdfsFilename]; ok {
+					for _, replica := range existed_replicas {
+						if membership_server.MembershipMap[replica].Status != FAILED_REMOVAL {
+							replicas = append(replicas, replica)
+						}
+					}
+				}
+				replicas_string := strings.Join(replicas, " ")
+				send_to(message.Hostname, replicas_string, server, message.LocalFilename, message.SdfsFilename, SHOW_ACK)
+				
 		}
 	}
 	// commands that all nodes will be handling
 	switch message.MessageType {
 		case REPLICATE:
-			// TODO
-			// localFilename will be the absolute path of the file at that node
-			fromPath := message.Info_Hostname + ":" + message.LocalFilename
-			dstPath := message.Info_Hostname + ":" + sdfs_folder_path + message.SdfsFilename
+			fromPath := message.Info_Hostname + ":" + local_folder_path + message.LocalFilename
+			dstPath := sdfs_folder_path + message.SdfsFilename
 			cmd := exec.Command("scp", fromPath, dstPath)
 			fmt.Println(cmd)
 			err := cmd.Run()
 			if err != nil {
-				fmt.Printf("Error: running scp from %s\n", message.Info_Hostname)
+				fmt.Printf("Error: running scp (REPLICATE) from %s\n", message.Info_Hostname)
 				break
 			}
+			fs_server.Files[message.SdfsFilename] = 1
 			send_to_master(fs_server, message.LocalFilename, message.SdfsFilename, REPLICATE_COMPLETE)
 			
 		case REPLICATE_RM:
-			// TODO
+			// currently designed to not physically remove the file
+			delete(fs_server.Files, message.SdfsFilename)
+
 		case GET_ACK:
-			// TODO
+			fromPath := message.Info_Hostname + ":" + sdfs_folder_path + message.SdfsFilename
+			dstPath := local_folder_path + message.LocalFilename
+			cmd := exec.Command("scp", fromPath, dstPath)
+			fmt.Println(cmd)
+			err := cmd.Run()
+			if err != nil {
+				fmt.Printf("Error: running scp (GET_ACK) from %s\n", message.Info_Hostname)
+				break
+			}
+
 		case GET_WAIT:
-			// TODO
+			fmt.Printf("GET_WAIT: The file %s is still being updating by other servers. Please wait until the write finishes\n", message.SdfsFilename)
+
 		case SHOW_ACK:
-			// TODO
+			replicas := strings.Split(message.Info_Hostname, " ")
+			fmt.Printf("SHOW_ACK: The file %s is stored at the following positons\n", message.SdfsFilename)
+			for _, replica := range replicas {
+				fmt.Printf("%s\n", replica)
+			}
 	}
 }
-
-
-// // REPLICATE MESSAGES
-// REPLICATE string = "REPLICATE" // master -> other nodes
-// REPLICATE_COMPLETE string = "REPLICATE_COMPLETE" // replica nodes -> master
-// REPLICATE_RM string = "REPLICATE_RM"
-
-// // FS MESSAGE
-// PUT string = "PUT" // nodes -> master
-// GET string = "GET" // nodes -> master
-// DELETE string = "DELETE" // nodes -> master
-// GET_WAIT string = "GET_WAIT" // There is a read/write conflict, the client needs to wait for the result
-// GET_ACK string = "GET_ACK" // The master has responded the GET request, and we can scp right now
-
 
 // sending GET / PUT / DELETE / REPLICATE_COMPLETE commands (to master)
 func send_to_master(server *FSserver, localFilename string, sdfsFilename string, msgType string) {
