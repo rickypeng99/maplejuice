@@ -597,7 +597,7 @@ func sendRunning(server *Server, msgType string, msgHostName string, msgDst []st
 			socket, err := net.Dial("udp", msgDst[hostname])
 
 			if err != nil {
-				log.Printf("Error: dialing UDP from to : %s in sendRunning", msgDst[hostname])
+				log.Printf("Error: dialing UDP from to : %s in sendRunning %s", msgDst[hostname], err)
 			}
 			var message Message = Message{
 				MessageType:   msgType,
