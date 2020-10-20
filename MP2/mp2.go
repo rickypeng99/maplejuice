@@ -14,18 +14,17 @@ import (
 	"math/rand"
 )
 
-var FS_PORT string = "8001"
-var MASTER_NODE string = "127.0.0.1:8001"
+var FS_PORT string = "9000"
+var MASTER_NODE string = "127.0.0.1:9000"
 
 // to satisfy at most 3 failures, we need to have 4 replicas
 // replicas will be created using SCP command
 var REPLICA_MAX int = 4
 
-var fs_server *FSserver
-var membership_server *Server
-
 var sdfs_folder_path = os.Getenv("HOME") + "/cs425/MP2/sdfsFiles"
 var local_folder_path = os.Getenv("HOME") + "/cs425/MP2/localFiles"
+
+var FS_NODES = make_fs_nodes()
 
 // FS Message struct
 type FSmessage struct {
@@ -78,6 +77,7 @@ const (
 
 
 func main() {
+	fmt.Printf("Welcome to use the simple distributed file system!")
 	if len(os.Args) == 2 {
 		FS_PORT = os.Args[1]
 	}
@@ -88,11 +88,18 @@ func main() {
 	// }
 	// for local test
 	hostname := "127.0.0.1:" + FS_PORT
-	fmt.Print(hostname)
-	fmt.Print(FS_PORT)
+	portInt, err := strconv.Atoi(FS_PORT)
+	if err != nil {
+		fmt.Printf("Error: strconv.Atoi from %s\n", hostname)
+	}
+	portInt -= 1000
+	PORT = strconv.Itoa(portInt)
+	membership_hostname := "127.0.0.1:" + PORT
+	fmt.Printf("SDFS is at: %s\n", hostname)
+	fmt.Printf("Failure detector is at: %s\n", membership_hostname)
 
-	fs_server = init_fs_server(hostname, FS_PORT)
-	membership_server = init_membership_server(hostname, PORT)
+	fs_server := init_fs_server(hostname, FS_PORT)
+	membership_server := init_membership_server(membership_hostname, PORT)
 
 	if (hostname == MASTER_NODE) {
 		init_master_node()
@@ -123,6 +130,8 @@ func fsCommandReader(fs_server *FSserver, membership_server *Server) {
 		fmt.Println("command: " + command)
 		//handling differnet commands
 		switch command {
+			case "help":
+				fmt.Println(":")
 			case "ls":
 				// show memberlist
 				for _, membership := range membership_server.MembershipMap {
@@ -219,7 +228,7 @@ func init_fs_server(hostname string, FS_PORT string) *FSserver{
 
 func init_master_node() {
 	fileDirectory = make(map[string][]string)
-	for _, node := range NODES {
+	for _, node := range FS_NODES {
 		fileDirectory[node] = []string{}
 	}
 	getQueue = make(map[string][]FSmessage)
@@ -272,6 +281,7 @@ func fsMessageHandler(server *FSserver, resp []byte, bytes_read int, membership_
 					}
 				} else {
 					main_node := hash(message.SdfsFilename)
+					// USE NODES instead of FS_NODES
 					for membership_server.MembershipMap[NODES[main_node]].Status == FAILED_REMOVAL {
 						if (main_node == 9) {
 							main_node = 0
@@ -377,7 +387,7 @@ func fsMessageHandler(server *FSserver, resp []byte, bytes_read int, membership_
 					dstNode := dst_pick_array[index]
 					file := filesNeedsToReplicated[index]
 					// TODO this needs to be re-replicate, therefore we need to fetch from sdfs folder to another sdfs folder
-					send_to(dstNode, startNode, fs_server, file, file, REPLICATE)
+					send_to(dstNode, startNode, server, file, file, RE_REPLICATE)
 				}
 
 
@@ -408,12 +418,25 @@ func fsMessageHandler(server *FSserver, resp []byte, bytes_read int, membership_
 				fmt.Printf("Error: running scp (REPLICATE) from %s\n", message.Info_Hostname)
 				break
 			}
-			fs_server.Files[message.SdfsFilename] = 1
-			send_to_master(fs_server, message.LocalFilename, message.SdfsFilename, REPLICATE_COMPLETE)
+			server.Files[message.SdfsFilename] = 1
+			send_to_master(server, message.LocalFilename, message.SdfsFilename, REPLICATE_COMPLETE)
+		
+		case RE_REPLICATE:
+			fromPath := message.Info_Hostname + ":" + sdfs_folder_path + message.SdfsFilename
+			dstPath := sdfs_folder_path + message.SdfsFilename
+			cmd := exec.Command("scp", fromPath, dstPath)
+			fmt.Println(cmd)
+			err := cmd.Run()
+			if err != nil {
+				fmt.Printf("Error: running scp (RE_REPLICATE) from %s\n", message.Info_Hostname)
+				break
+			}
+			server.Files[message.SdfsFilename] = 1
+			send_to_master(server, message.LocalFilename, message.SdfsFilename, REPLICATE_COMPLETE)
 			
 		case REPLICATE_RM:
 			// currently designed to not physically remove the file
-			delete(fs_server.Files, message.SdfsFilename)
+			delete(server.Files, message.SdfsFilename)
 
 		case GET_ACK:
 			fromPath := message.Info_Hostname + ":" + sdfs_folder_path + message.SdfsFilename
@@ -440,7 +463,8 @@ func fsMessageHandler(server *FSserver, resp []byte, bytes_read int, membership_
 
 // sending GET / PUT / DELETE / REPLICATE_COMPLETE commands (to master)
 func send_to_master(server *FSserver, localFilename string, sdfsFilename string, msgType string) {
-	socket, err := net.Dial("udp", MASTER_NODE+":"+FS_PORT)
+	// socket, err := net.Dial("udp", MASTER_NODE+":"+FS_PORT)
+	socket, err := net.Dial("udp", MASTER_NODE)
 	// socket, err := net.Dial("udp", INTRODUCER)
 	if err != nil {
 		fmt.Printf("Error: dialing UDP to master : %s\n", msgType)
@@ -464,7 +488,8 @@ func send_to_master(server *FSserver, localFilename string, sdfsFilename string,
 
 // sending other message types from master node to other nodes
 func send_to(dstHostname string, stHostname string, server *FSserver, localFilename string, sdfsFilename string, msgType string) {
-	socket, err := net.Dial("udp", dstHostname+":"+FS_PORT)
+	// socket, err := net.Dial("udp", dstHostname+":"+FS_PORT)
+	socket, err := net.Dial("udp", dstHostname)
 	// socket, err := net.Dial("udp", INTRODUCER)
 	if err != nil {
 		fmt.Printf("Error: dialing UDP to master : %s\n", msgType)
@@ -490,7 +515,8 @@ func send_to(dstHostname string, stHostname string, server *FSserver, localFilen
 * send a message about failures to myself 
 */
 func send_to_myself(server *Server, failedNode string, msgType string) {
-	socket, err := net.Dial("udp", server.Hostname+":"+FS_PORT)
+	// socket, err := net.Dial("udp", to_fs_node(server.Hostname+":"+FS_PORT))
+	socket, err := net.Dial("udp", to_fs_node(server.Hostname))
 	// socket, err := net.Dial("udp", INTRODUCER)
 	if err != nil {
 		fmt.Printf("Error: dialing UDP to master : %s\n", msgType)
@@ -542,11 +568,11 @@ func getReplicas(main_node int) []string {
 	result := []string{}
 	for i := range offset {
 		if main_node + i < 0 {
-			result = append(result, NODES[len(NODES) - 1])
-		} else if main_node + i >= len(NODES) {
-			result = append(result, NODES[(main_node + i) % 10])
+			result = append(result, FS_NODES[len(FS_NODES) - 1])
+		} else if main_node + i >= len(FS_NODES) {
+			result = append(result, FS_NODES[(main_node + i) % 10])
 		} else {
-			result = append(result, NODES[main_node + i])
+			result = append(result, FS_NODES[main_node + i])
 		}
 	}
 	return result
@@ -564,7 +590,7 @@ func getKeysFromMap(m map[string]int) []string {
 // get all node that are not storing replica of a file
 func filter_by_non_replica(membership_server *Server, active_replicas []string) []string{
 	var result []string
-	for _, node := range NODES {
+	for _, node := range FS_NODES {
 		if membership_server.MembershipMap[node].Status == FAILED_REMOVAL {
 			continue
 		}
@@ -578,6 +604,36 @@ func filter_by_non_replica(membership_server *Server, active_replicas []string) 
 		if flag == 1 {
 			result = append(result, node)
 		}
+	}
+	return result
+}
+
+// membership node transfers to sdfs node
+func to_fs_node(membership_node string) string{
+	temp_array := strings.Split(membership_node, ":")
+	port := temp_array[1]
+	portInt, err := strconv.Atoi(port)
+	if err != nil {
+		fmt.Printf("Error: to_fs_node transfer from %s\n", port)
+	}
+	portInt += 1000 //8000 -> 9000
+	temp_array[1] = strconv.Itoa(portInt)
+	return strings.Join(temp_array, ":")
+}
+
+func make_fs_nodes() [10]string {
+	var result [10]string
+	// for idx, _ := range result {
+	// 	var index int = idx + 1
+	// 	if index < 10 {
+	// 		result[idx] = "fa20-cs425-g35-0" + strconv.Itoa(index) + ".cs.illinois.edu"
+	// 	} else {
+	// 		result[idx] = "fa20-cs425-g35-10.cs.illinois.edu"
+	// 	}
+	// }
+	// for local test
+	for idx, _ := range result {
+		result[idx] = "127.0.0.1:" + strconv.Itoa(9000+idx)
 	}
 	return result
 }

@@ -21,8 +21,8 @@ var mutex sync.Mutex
 
 // CONFIG
 const (
-	INTRODUCER string = "fa20-cs425-g35-01.cs.illinois.edu"
-	// INTRODUCER  string = "127.0.0.1:8000"
+	// INTRODUCER string = "fa20-cs425-g35-01.cs.illinois.edu"
+	INTRODUCER  string = "127.0.0.1:8000"
 	NODE_CNT    int = 10
 	GOSSIP_PARA int = 5 // number of machine to gossip to at same time
 	// REVIEW : timing parameters
@@ -110,12 +110,12 @@ func start_failure_detector() {
 		PORT = os.Args[1]
 	}
 	// get host name of the current machine
-	hostname, err := os.Hostname()
-	if err != nil {
-		log.Printf("os.HostName() err")
-	}
+	// hostname, err := os.Hostname()
+	// if err != nil {
+	// 	log.Printf("os.HostName() err")
+	// }
 	// for local test
-	// hostname := "127.0.0.1:" + PORT
+	hostname := "127.0.0.1:" + PORT
 	fmt.Print(hostname)
 	// setting up current server struct
 	server := init_membership_server(hostname, PORT)
@@ -261,8 +261,8 @@ func messageHandler(server *Server, resp []byte, bytes_read int) {
 				if hostname == server.Hostname || hostname == message.Hostname {
 					continue
 				}
-				socket, err := net.Dial("udp", hostname+":"+PORT)
-				// socket, err := net.Dial("udp", hostname)
+				// socket, err := net.Dial("udp", hostname+":"+PORT)
+				socket, err := net.Dial("udp", hostname)
 				if err != nil {
 					log.Printf("Error: dialing UDP from node: %s to new joined node", server.Hostname)
 				}
@@ -284,8 +284,8 @@ func messageHandler(server *Server, resp []byte, bytes_read int) {
 			}
 
 			// send the initialized data to the new joined node
-			socket, err := net.Dial("udp", message.Hostname+":"+PORT)
-			// socket, err := net.Dial("udp", message.Hostname)
+			// socket, err := net.Dial("udp", message.Hostname+":"+PORT)
+			socket, err := net.Dial("udp", message.Hostname)
 			log.Printf("%s has successfully joined the group", message.Hostname)
 
 			if err != nil {
@@ -430,8 +430,8 @@ func join(server *Server) {
 
 	if server.Hostname != INTRODUCER {
 		// sending heatbeat by udp to other servers
-		socket, err := net.Dial("udp", INTRODUCER+":"+PORT)
-		// socket, err := net.Dial("udp", INTRODUCER)
+		// socket, err := net.Dial("udp", INTRODUCER+":"+PORT)
+		socket, err := net.Dial("udp", INTRODUCER)
 
 		if err != nil {
 			log.Printf("Error: dialing UDP to introducer")
@@ -471,8 +471,8 @@ func leave(server *Server) {
 	}
 
 	for _, hostname := range NODES {
-		socket, err := net.Dial("udp", hostname+":"+PORT)
-		// socket, err := net.Dial("udp", hostname)
+		// socket, err := net.Dial("udp", hostname+":"+PORT)
+		socket, err := net.Dial("udp", hostname)
 
 		if err != nil {
 			log.Printf("Error: dialing UDP to introducer")
@@ -570,18 +570,18 @@ func unmarshalMsg(jsonMsg []byte) Message {
 
 func makeNodes() [10]string {
 	var result [10]string
-	for idx, _ := range result {
-		var index int = idx + 1
-		if index < 10 {
-			result[idx] = "fa20-cs425-g35-0" + strconv.Itoa(index) + ".cs.illinois.edu"
-		} else {
-			result[idx] = "fa20-cs425-g35-10.cs.illinois.edu"
-		}
-	}
-	// for local test
 	// for idx, _ := range result {
-	// 	result[idx] = "127.0.0.1:" + strconv.Itoa(8000+idx)
+	// 	var index int = idx + 1
+	// 	if index < 10 {
+	// 		result[idx] = "fa20-cs425-g35-0" + strconv.Itoa(index) + ".cs.illinois.edu"
+	// 	} else {
+	// 		result[idx] = "fa20-cs425-g35-10.cs.illinois.edu"
+	// 	}
 	// }
+	// for local test
+	for idx, _ := range result {
+		result[idx] = "127.0.0.1:" + strconv.Itoa(8000+idx)
+	}
 	return result
 }
 
@@ -593,8 +593,8 @@ func sendRunning(server *Server, msgType string, msgHostName string, msgDst []st
 		// fmt.Println(*(server.MembershipMap[msgDst[hostname]]))
 		// fmt.Printf("sending a msg type: %v in sendrunning", msgType)
 		if server.Hostname != msgDst[hostname] && server.MembershipMap[msgDst[hostname]].Status == RUNNING {
-			socket, err := net.Dial("udp", msgDst[hostname]+":"+PORT)
-			// socket, err := net.Dial("udp", msgDst[hostname])
+			// socket, err := net.Dial("udp", msgDst[hostname]+":"+PORT)
+			socket, err := net.Dial("udp", msgDst[hostname])
 
 			if err != nil {
 				log.Printf("Error: dialing UDP from to : %s in sendRunning", msgDst[hostname])
