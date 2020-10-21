@@ -66,6 +66,7 @@ const (
 	FS_FAILED string = "FS_FAILED" // master -> master; re selecting the replicas 
 	GET_WAIT string = "GET_WAIT" // There is a read/write conflict, the client needs to wait for the result
 	GET_ACK string = "GET_ACK" // The master has responded the GET request, and we can scp right now
+	GET_NOT_FOUND string = "GET_NOT_FOUND" 
 
 	// show
 	SHOW string = "SHOW" // node -> master getting the list of machines that a file is at
@@ -105,12 +106,15 @@ func main() {
 		init_master_node()
 	}
 
+	// UDP server for heartbeat (for failure detectors)
 	go messageListener(membership_server)
+	// UDP server for FS messages (PUT, GET....)
 	go fsMessageListener(fs_server, membership_server)
 
 	fmt.Println("Suucessfully initialized fs & membership servers and fs & membership message listeners")
 	fmt.Println("Type help for command guidelines")
-	// for testing, comment out for demo. automatically joins:
+
+	// automatically joins: for testing simplicity, comment out for demo. 
 	join(membership_server)
 	// read command from the commandline
 	fsCommandReader(fs_server, membership_server)
@@ -190,10 +194,10 @@ func fsCommandReader(fs_server *FSserver, membership_server *Server) {
 					fmt.Println("Please input <sdfsfilename> <localfilname>")
 					break
 				}
-				localFilname := strings.TrimSpace(fileInfos[0])
-				sdfsFilename := strings.TrimSpace(fileInfos[1])
+				sdfsFilename := strings.TrimSpace(fileInfos[0])
+				localFilename := strings.TrimSpace(fileInfos[1])
 				// send put infos to the master node
-				send_to_master(fs_server, localFilname, sdfsFilename, GET)
+				send_to_master(fs_server, localFilename, sdfsFilename, GET)
 			case "delete":
 				fmt.Println("Please input <sdfsfilename>")
 				sentence, err = reader.ReadBytes('\n')
@@ -329,7 +333,7 @@ func fsMessageHandler(server *FSserver, resp []byte, bytes_read int, membership_
 				// sending GET_ACK back to hold get requests
 				if requests, present := getQueue[message.SdfsFilename]; present {
 					for _, request := range requests {
-						send_to(request.Hostname, message.Hostname, server, message.LocalFilename, message.SdfsFilename, GET_ACK)
+						send_to(request.Hostname, message.Hostname, server, request.LocalFilename, request.SdfsFilename, GET_ACK)
 					}
 				}
 				// delete the queue
@@ -347,14 +351,20 @@ func fsMessageHandler(server *FSserver, resp []byte, bytes_read int, membership_
 					}
 					send_to(message.Hostname, message.Hostname, server, message.LocalFilename, message.SdfsFilename, GET_WAIT)
 				} else {
-					for _, replica := range fileDirectory[message.SdfsFilename] {
-						if membership_server.MembershipMap[to_membership_node(replica)].Status != FAILED_REMOVAL {
-							// telling the client to scp from replica
-							send_to(message.Hostname, replica, server, message.LocalFilename, message.SdfsFilename, GET_ACK)
-							// only get once
-							break
+					if replicas, ok := fileDirectory[message.SdfsFilename]; ok {
+						for _, replica := range replicas {
+							if membership_server.MembershipMap[to_membership_node(replica)].Status != FAILED_REMOVAL {
+								// telling the client to scp from replica
+								send_to(message.Hostname, replica, server, message.LocalFilename, message.SdfsFilename, GET_ACK)
+								// only get once
+								break
+							}
 						}
+					} else {
+						// file not found
+						send_to(message.Hostname, "", server, message.LocalFilename, message.SdfsFilename, GET_NOT_FOUND)
 					}
+					
 				}
 			
 			case DELETE:
@@ -484,6 +494,9 @@ func fsMessageHandler(server *FSserver, resp []byte, bytes_read int, membership_
 
 		case GET_WAIT:
 			fmt.Printf("GET_WAIT: The file %s is still being updating by other servers. Please wait until the write finishes\n", message.SdfsFilename)
+
+		case GET_NOT_FOUND:
+			fmt.Printf("GETS_NOT_FOUND: The file %s is not found in the file system\n", message.SdfsFilename)
 
 		case SHOW_ACK:
 			replicas := strings.Split(message.Info_Hostname, " ")
