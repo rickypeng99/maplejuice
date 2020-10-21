@@ -288,10 +288,9 @@ func fsMessageHandler(server *FSserver, resp []byte, bytes_read int, membership_
 	fmt.Printf("FS message received: %s, from host: %s\n", message.MessageType, message.Hostname)
 	// switch of all kinds of FS mesages
 	if server.Hostname == MASTER_NODE {
-		// TODO: commands that only the master node will be handling
+		// commands that only the master node will be handling
 		switch message.MessageType {
 			case PUT:
-				// TODO: change the local file name to local absolute path
 				isProgressingFilePUT[message.SdfsFilename] = 1
 				var replicas []string
 				if existed_replicas, ok := fileDirectory[message.SdfsFilename]; ok {
@@ -451,14 +450,12 @@ func fsMessageHandler(server *FSserver, resp []byte, bytes_read int, membership_
 		case REPLICATE:
 			fromPath := "rickypeng99@" + remove_port_from_hostname(message.Info_Hostname) + ":" + local_folder_path + message.LocalFilename
 			dstPath := sdfs_folder_path + message.SdfsFilename
+			// TODO: try to implement TCP file transfer instead of using the built in command
 			cmd := exec.Command("scp", fromPath, dstPath)
 			fmt.Println(cmd)
 			err := cmd.Run()
-			// if err != nil {
-			// 	fmt.Printf("Error: running scp (REPLICATE) from %s\n", message.Info_Hostname)
-			// 	break
-			// }
 			fmt.Println(err)
+
 			server.Files[message.SdfsFilename] = 1
 			send_to_master(server, message.LocalFilename, message.SdfsFilename, REPLICATE_COMPLETE)
 		
@@ -468,11 +465,8 @@ func fsMessageHandler(server *FSserver, resp []byte, bytes_read int, membership_
 			cmd := exec.Command("scp", fromPath, dstPath)
 			fmt.Println(cmd)
 			err := cmd.Run()
-			// if err != nil {
-			// 	fmt.Printf("Error: running scp (RE_REPLICATE) from %s\n", message.Info_Hostname)
-			// 	break
-			// }
 			fmt.Println(err)
+
 			server.Files[message.SdfsFilename] = 1
 			send_to_master(server, message.LocalFilename, message.SdfsFilename, REPLICATE_COMPLETE)
 			
@@ -486,10 +480,6 @@ func fsMessageHandler(server *FSserver, resp []byte, bytes_read int, membership_
 			cmd := exec.Command("scp", fromPath, dstPath)
 			fmt.Println(cmd)
 			err := cmd.Run()
-			// if err != nil {
-			// 	fmt.Printf("Error: running scp (GET_ACK) from %s\n", message.Info_Hostname)
-			// 	break
-			// }
 			fmt.Println(err)
 
 		case GET_WAIT:
