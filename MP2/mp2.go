@@ -666,14 +666,15 @@ func to_fs_node(membership_node string) string{
 // sdfs node transfers to membership node
 func to_membership_node(fs_node string) string{
 	temp_array := strings.Split(fs_node, ":")
-	port := temp_array[1]
-	portInt, err := strconv.Atoi(port)
-	if err != nil {
-		fmt.Printf("Error: to_fs_node transfer from %s\n", port)
-	}
-	portInt -= 1000 //9000 -> 8000
-	temp_array[1] = strconv.Itoa(portInt)
-	return strings.Join(temp_array, ":")
+	// port := temp_array[1]
+	// portInt, err := strconv.Atoi(port)
+	// if err != nil {
+	// 	fmt.Printf("Error: to_fs_node transfer from %s\n", port)
+	// }
+	// portInt -= 1000 //9000 -> 8000
+	// temp_array[1] = strconv.Itoa(portInt)
+	// return strings.Join(temp_array, ":")
+	return temp_array[0]
 }
 
 func make_fs_nodes() [10]string {
