@@ -13,9 +13,10 @@ import (
 	"os/exec"
 	"math/rand"
 )
-
+// fa20-cs425-g35-01.cs.illinois.edu
 var FS_PORT string = "9000"
-var MASTER_NODE string = "127.0.0.1:9000"
+var MASTER_NODE string = "fa20-cs425-g35-01.cs.illinois.edu"
+// var MASTER_NODE string = "127.0.0.1:9000"
 
 // to satisfy at most 3 failures, we need to have 4 replicas
 // replicas will be created using SCP command
@@ -83,19 +84,21 @@ func main() {
 		FS_PORT = os.Args[1]
 	}
 	// get host name of the current machine
-	// hostname, err := os.Hostname()
-	// if err != nil {
-	// 	log.Printf("os.HostName() err")
-	// }
+	hostname, err := os.Hostname()
+	if err != nil {
+		log.Printf("os.HostName() err")
+	}
 	// for local test
-	hostname := "127.0.0.1:" + FS_PORT
+	// hostname := "127.0.0.1:" + FS_PORT
 	portInt, err := strconv.Atoi(FS_PORT)
 	if err != nil {
 		fmt.Printf("Error: strconv.Atoi from %s\n", hostname)
 	}
 	portInt -= 1000
 	PORT = strconv.Itoa(portInt)
-	membership_hostname := "127.0.0.1:" + PORT
+	membership_hostname := hostname + ":" + PORT
+	hostname += ":" + FS_PORT
+	// membership_hostname := "127.0.0.1:" + PORT
 	fmt.Printf("SDFS is at: %s\n", hostname)
 	fmt.Printf("Failure detector is at: %s\n", membership_hostname)
 
@@ -448,7 +451,8 @@ func fsMessageHandler(server *FSserver, resp []byte, bytes_read int, membership_
 	// commands that all nodes will be handling
 	switch message.MessageType {
 		case REPLICATE:
-			fromPath := "rickypeng99@" + remove_port_from_hostname(message.Info_Hostname) + ":" + local_folder_path + message.LocalFilename
+			fromPath := "ruiqip2@" + remove_port_from_hostname(message.Info_Hostname) + ":" + local_folder_path + message.LocalFilename
+			// fromPath := "rickypeng99@" + remove_port_from_hostname(message.Info_Hostname) + ":" + local_folder_path + message.LocalFilename
 			dstPath := sdfs_folder_path + message.SdfsFilename
 			// TODO: try to implement TCP file transfer instead of using the built in command
 			cmd := exec.Command("scp", fromPath, dstPath)
@@ -460,7 +464,8 @@ func fsMessageHandler(server *FSserver, resp []byte, bytes_read int, membership_
 			send_to_master(server, message.LocalFilename, message.SdfsFilename, REPLICATE_COMPLETE)
 		
 		case RE_REPLICATE:
-			fromPath := "rickypeng99@" + remove_port_from_hostname(message.Info_Hostname) + ":" + sdfs_folder_path + message.SdfsFilename
+			fromPath := "ruiqip2@" + remove_port_from_hostname(message.Info_Hostname) + ":" + sdfs_folder_path + message.SdfsFilename
+			// fromPath := "rickypeng99@" + remove_port_from_hostname(message.Info_Hostname) + ":" + sdfs_folder_path + message.SdfsFilename
 			dstPath := sdfs_folder_path + message.SdfsFilename
 			cmd := exec.Command("scp", fromPath, dstPath)
 			fmt.Println(cmd)
@@ -475,7 +480,8 @@ func fsMessageHandler(server *FSserver, resp []byte, bytes_read int, membership_
 			delete(server.Files, message.SdfsFilename)
 
 		case GET_ACK:
-			fromPath := "rickypeng99@" + remove_port_from_hostname(message.Info_Hostname) + ":" + sdfs_folder_path + message.SdfsFilename
+			fromPath := "ruiqip2@" + remove_port_from_hostname(message.Info_Hostname) + ":" + sdfs_folder_path + message.SdfsFilename
+			// fromPath := "rickypeng99@" + remove_port_from_hostname(message.Info_Hostname) + ":" + sdfs_folder_path + message.SdfsFilename
 			dstPath := local_folder_path + message.LocalFilename
 			cmd := exec.Command("scp", fromPath, dstPath)
 			fmt.Println(cmd)
@@ -672,18 +678,18 @@ func to_membership_node(fs_node string) string{
 
 func make_fs_nodes() [10]string {
 	var result [10]string
-	// for idx, _ := range result {
-	// 	var index int = idx + 1
-	// 	if index < 10 {
-	// 		result[idx] = "fa20-cs425-g35-0" + strconv.Itoa(index) + ".cs.illinois.edu"
-	// 	} else {
-	// 		result[idx] = "fa20-cs425-g35-10.cs.illinois.edu"
-	// 	}
-	// }
-	// for local test
 	for idx, _ := range result {
-		result[idx] = "127.0.0.1:" + strconv.Itoa(9000+idx)
+		var index int = idx + 1
+		if index < 10 {
+			result[idx] = "fa20-cs425-g35-0" + strconv.Itoa(index) + ".cs.illinois.edu:9000"
+		} else {
+			result[idx] = "fa20-cs425-g35-10.cs.illinois.edu:9000"
+		}
 	}
+	// for local test
+	// for idx, _ := range result {
+	// 	result[idx] = "127.0.0.1:" + strconv.Itoa(9000+idx)
+	// }
 	return result
 }
 
