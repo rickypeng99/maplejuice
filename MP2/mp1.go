@@ -526,11 +526,15 @@ func dereferencedMemebershipMap(membershipList map[string]*Member) map[string]Me
 }
 
 // merge two membershiplist (based on gossip)
-func merge(self map[string]*Member, other map[string]Member) {
+func merge(server *Server, self map[string]*Member, other map[string]Member) {
 	mutex.Lock()
 	for key, member := range other {
 		if member.Status == FAILED_REMOVAL {
 			self[key].Status = FAILED_REMOVAL
+			if server.Hostname == INTRODUCER {
+				send_to_myself(server, key, FS_FAILED)
+			}
+			log.Printf("Failure removed (Gossip-merge): %s\n", key)
 			continue
 		} else if member.Status == LEFT {
 			self[key].Status = LEFT
@@ -626,7 +630,7 @@ func heartBeatHandler(server *Server, message Message) {
 	// Sent from a node to another node
 	if server.Mode == GOSSIP {
 		// need to merge
-		merge(server.MembershipMap, message.MembershipMap)
+		merge(server, server.MembershipMap, message.MembershipMap)
 	} else {
 		// all to all
 		server.MembershipMap[message.Hostname].Timestamp = time.Now()
