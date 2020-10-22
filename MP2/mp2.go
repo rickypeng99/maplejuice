@@ -652,15 +652,16 @@ func filter_by_non_replica(membership_server *Server, active_replicas []string) 
 
 // membership node transfers to sdfs node
 func to_fs_node(membership_node string) string{
-	temp_array := strings.Split(membership_node, ":")
-	port := temp_array[1]
-	portInt, err := strconv.Atoi(port)
-	if err != nil {
-		fmt.Printf("Error: to_fs_node transfer from %s\n", port)
-	}
-	portInt += 1000 //8000 -> 9000
-	temp_array[1] = strconv.Itoa(portInt)
-	return strings.Join(temp_array, ":")
+	// temp_array := strings.Split(membership_node, ":")
+	// port := temp_array[1]
+	// portInt, err := strconv.Atoi(port)
+	// if err != nil {
+	// 	fmt.Printf("Error: to_fs_node transfer from %s\n", port)
+	// }
+	// portInt += 1000 //8000 -> 9000
+	// temp_array[1] = strconv.Itoa(portInt)
+	// return strings.Join(temp_array, ":")
+	return membership_node + ":9000"
 }
 
 // sdfs node transfers to membership node
