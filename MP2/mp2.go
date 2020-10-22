@@ -96,7 +96,7 @@ func main() {
 	}
 	portInt -= 1000
 	PORT = strconv.Itoa(portInt)
-	membership_hostname := hostname + ":" + PORT
+	membership_hostname := hostname
 	hostname += ":" + FS_PORT
 	// membership_hostname := "127.0.0.1:" + PORT
 	fmt.Printf("SDFS is at: %s\n", hostname)
