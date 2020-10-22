@@ -530,11 +530,13 @@ func merge(server *Server, self map[string]*Member, other map[string]Member) {
 	mutex.Lock()
 	for key, member := range other {
 		if member.Status == FAILED_REMOVAL {
-			self[key].Status = FAILED_REMOVAL
-			if server.Hostname == INTRODUCER {
-				send_to_myself(server, key, FS_FAILED)
+			if self[key].Status != FAILED_REMOVAL {
+				if server.Hostname == INTRODUCER {
+					send_to_myself(server, key, FS_FAILED)
+				}
+				log.Printf("Failure removed (Gossip-merge): %s\n", key)
 			}
-			log.Printf("Failure removed (Gossip-merge): %s\n", key)
+			self[key].Status = FAILED_REMOVAL
 			continue
 		} else if member.Status == LEFT {
 			self[key].Status = LEFT
