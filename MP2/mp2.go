@@ -15,7 +15,7 @@ import (
 )
 // fa20-cs425-g35-01.cs.illinois.edu
 var FS_PORT string = "9000"
-var MASTER_NODE string = "fa20-cs425-g35-01.cs.illinois.edu"
+var MASTER_NODE string = "fa20-cs425-g35-01.cs.illinois.edu:9000"
 // var MASTER_NODE string = "127.0.0.1:9000"
 
 // to satisfy at most 3 failures, we need to have 4 replicas
