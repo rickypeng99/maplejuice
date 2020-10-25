@@ -2,14 +2,12 @@ package main
 import (
 	"bufio"
 	"bytes"
-	"encoding/json"
 	"fmt"
 	"log"
 	"net"
 	"os"
 	"strconv"
 	"strings"
-	"hash/fnv"
 	"os/exec"
 	"math/rand"
 )
@@ -580,122 +578,3 @@ func send_to_myself(server *Server, failedNode string, msgType string) {
 	}
 }
 
-// ------------------------------------------UTILITY FUNCTIONS---------------------------------------------
-func marshalFSmsg(message FSmessage) []byte {
-	//marshal the message to json
-	marshaledMsg, err := json.Marshal(message)
-	if err != nil {
-		fmt.Printf("Error: Marshalling FS message: %s\n", err)
-	}
-	return marshaledMsg
-}
-
-func unmarshalFSmsg(jsonMsg []byte) FSmessage {
-	var message FSmessage
-	err := json.Unmarshal(jsonMsg, &message)
-	if err != nil {
-		fmt.Printf("Error: Unmarshalling FS message: %s\n", err)
-	}
-	return message
-}
-
-func hash(s string) int {
-	h := fnv.New32a()
-	h.Write([]byte(s))
-	return int(h.Sum32()) % 10
-}
-
-func getReplicas(main_node int) []string {
-	offset := []int{-1, 0, 1, 2}
-	result := []string{}
-	for i := range offset {
-		if main_node + i < 0 {
-			result = append(result, FS_NODES[len(FS_NODES) - 1])
-		} else if main_node + i >= len(FS_NODES) {
-			result = append(result, FS_NODES[(main_node + i) % 10])
-		} else {
-			result = append(result, FS_NODES[main_node + i])
-		}
-	}
-	return result
-}
-
-func getKeysFromMap(m map[string]int) []string {
-	keys := []string{}
-    for k := range m {
-        keys = append(keys, k)
-	}
-	return keys
-}
-
-// functions that are used to filter
-// get all node that are not storing replica of a file
-func filter_by_non_replica(membership_server *Server, active_replicas []string) []string{
-	var result []string
-	for _, node := range FS_NODES {
-		if membership_server.MembershipMap[to_membership_node(node)].Status == FAILED_REMOVAL {
-			continue
-		}
-		flag := 1
-		for _, replica := range active_replicas {
-			if replica == node {
-				flag = 0
-				break
-			}
-		}
-		if flag == 1 {
-			result = append(result, node)
-		}
-	}
-	return result
-}
-
-// membership node transfers to sdfs node
-func to_fs_node(membership_node string) string{
-	// temp_array := strings.Split(membership_node, ":")
-	// port := temp_array[1]
-	// portInt, err := strconv.Atoi(port)
-	// if err != nil {
-	// 	fmt.Printf("Error: to_fs_node transfer from %s\n", port)
-	// }
-	// portInt += 1000 //8000 -> 9000
-	// temp_array[1] = strconv.Itoa(portInt)
-	// return strings.Join(temp_array, ":")
-	return membership_node + ":9000"
-}
-
-// sdfs node transfers to membership node
-func to_membership_node(fs_node string) string{
-	temp_array := strings.Split(fs_node, ":")
-	// port := temp_array[1]
-	// portInt, err := strconv.Atoi(port)
-	// if err != nil {
-	// 	fmt.Printf("Error: to_fs_node transfer from %s\n", port)
-	// }
-	// portInt -= 1000 //9000 -> 8000
-	// temp_array[1] = strconv.Itoa(portInt)
-	// return strings.Join(temp_array, ":")
-	return temp_array[0]
-}
-
-func make_fs_nodes() [10]string {
-	var result [10]string
-	for idx, _ := range result {
-		var index int = idx + 1
-		if index < 10 {
-			result[idx] = "fa20-cs425-g35-0" + strconv.Itoa(index) + ".cs.illinois.edu:9000"
-		} else {
-			result[idx] = "fa20-cs425-g35-10.cs.illinois.edu:9000"
-		}
-	}
-	// for local test
-	// for idx, _ := range result {
-	// 	result[idx] = "127.0.0.1:" + strconv.Itoa(9000+idx)
-	// }
-	return result
-}
-
-func remove_port_from_hostname(hostname string) string{
-	temp := strings.Split(hostname, ":")
-	return temp[0]
-}

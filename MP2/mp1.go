@@ -3,7 +3,6 @@ package main
 import (
 	"bufio"
 	"bytes"
-	"encoding/json"
 	"fmt"
 	"log"
 	"math/rand"
@@ -13,7 +12,6 @@ import (
 	"strings"
 	"sync"
 	"time"
-	"errors"
 )
 
 //lock
@@ -556,41 +554,6 @@ func merge(server *Server, self map[string]*Member, other map[string]Member) {
 	mutex.Unlock()
 }
 
-func marshalMsg(message Message) []byte {
-	//marshal the message to json
-	marshaledMsg, err := json.Marshal(message)
-	if err != nil {
-		log.Printf("Error: Marshalling JOIN message: %s", err)
-	}
-	return marshaledMsg
-}
-
-func unmarshalMsg(jsonMsg []byte) Message {
-	var message Message
-	err := json.Unmarshal(jsonMsg, &message)
-	if err != nil {
-		log.Printf("Error: Unmarshalling JOIN message: %s", err)
-	}
-	return message
-}
-
-func makeNodes() [10]string {
-	var result [10]string
-	for idx, _ := range result {
-		var index int = idx + 1
-		if index < 10 {
-			result[idx] = "fa20-cs425-g35-0" + strconv.Itoa(index) + ".cs.illinois.edu"
-		} else {
-			result[idx] = "fa20-cs425-g35-10.cs.illinois.edu"
-		}
-	}
-	// for local test
-	// for idx, _ := range result {
-	// 	result[idx] = "127.0.0.1:" + strconv.Itoa(8000+idx)
-	// }
-	return result
-}
-
 /*
  * send a message of type msgType to all RUNNING member in membership list
  */
@@ -652,54 +615,4 @@ func timer(server *Server) {
 		}
 		sendHeartbeat(server)
 	}
-}
-
-func getAllNodesButSelf(vs []string, server *Server) []string {
-	vsf := make([]string, 0)
-	for _, v := range vs {
-		if v != server.Hostname {
-			vsf = append(vsf, v)
-		}
-	}
-	return vsf
-}
-
-/** get external ip address
-https://stackoverflow.com/questions/23558425/how-do-i-get-the-local-ip-address-in-go
-**/
-func externalIP() (string, error) {
-	ifaces, err := net.Interfaces()
-	if err != nil {
-		return "", err
-	}
-	for _, iface := range ifaces {
-		if iface.Flags&net.FlagUp == 0 {
-			continue // interface down
-		}
-		if iface.Flags&net.FlagLoopback != 0 {
-			continue // loopback interface
-		}
-		addrs, err := iface.Addrs()
-		if err != nil {
-			return "", err
-		}
-		for _, addr := range addrs {
-			var ip net.IP
-			switch v := addr.(type) {
-			case *net.IPNet:
-				ip = v.IP
-			case *net.IPAddr:
-				ip = v.IP
-			}
-			if ip == nil || ip.IsLoopback() {
-				continue
-			}
-			ip = ip.To4()
-			if ip == nil {
-				continue // not an ipv4 address
-			}
-			return ip.String(), nil
-		}
-	}
-	return "", errors.New("are you connected to the network?")
 }
