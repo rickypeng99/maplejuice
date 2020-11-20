@@ -10,7 +10,26 @@ import (
 	"errors"
 
 )
-// ------------------------------------------UTILITY FUNCTIONS---------------------------------------------
+// ------------------------------------------UTILITY FUNCTIONS FOR MAPLE JUICE---------------------------------------------
+func marshalMJmsg(message MJmessage) []byte {
+	//marshal the message to json
+	marshaledMsg, err := json.Marshal(message)
+	if err != nil {
+		fmt.Printf("Error: Marshalling MJ message: %s\n", err)
+	}
+	return marshaledMsg
+}
+
+func unmarshalMJmsg(jsonMsg []byte) MJmessage {
+	var message MJmessage
+	err := json.Unmarshal(jsonMsg, &message)
+	if err != nil {
+		fmt.Printf("Error: Unmarshalling FS message: %s\n", err)
+	}
+	return message
+}
+
+// ------------------------------------------UTILITY FUNCTIONS FOR FS---------------------------------------------
 func marshalFSmsg(message FSmessage) []byte {
 	//marshal the message to json
 	marshaledMsg, err := json.Marshal(message)
@@ -140,6 +159,8 @@ func getAllNodesButSelf(vs []string, server *Server) []string {
 	}
 	return vsf
 }
+
+// UTILITY FUNCTIONS FOR MP1
 
 /** get external ip address
 https://stackoverflow.com/questions/23558425/how-do-i-get-the-local-ip-address-in-go

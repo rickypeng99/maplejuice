@@ -76,7 +76,7 @@ const (
 
 
 
-func main() {
+func initiate_sdfs() {
 	fmt.Println("Welcome to use the simple distributed file system!")
 	if len(os.Args) == 2 {
 		FS_PORT = os.Args[1]
