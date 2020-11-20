@@ -1,0 +1,1 @@
+Folder for a node to hold its sdfs files
