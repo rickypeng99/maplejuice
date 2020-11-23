@@ -430,6 +430,9 @@ func fsMessageHandler(server *FSserver, resp []byte, bytes_read int, membership_
 					send_to(dstNode, startNode, server, file, file, RE_REPLICATE)
 				}
 
+				// send failure message to its master port that runs maple juice
+				failChannel <- message.Hostname
+
 
 			case SHOW:
 				// send the replica info back to node

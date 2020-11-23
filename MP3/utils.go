@@ -29,6 +29,23 @@ func unmarshalMJmsg(jsonMsg []byte) MJmessage {
 	return message
 }
 
+func make_mj_nodes() [10]string {
+	var result [10]string
+	// for idx, _ := range result {
+	// 	var index int = idx + 1
+	// 	if index < 10 {
+	// 		result[idx] = "fa20-cs425-g35-0" + strconv.Itoa(index) + ".cs.illinois.edu:9000"
+	// 	} else {
+	// 		result[idx] = "fa20-cs425-g35-10.cs.illinois.edu:9000"
+	// 	}
+	// }
+	// for local test
+	for idx, _ := range result {
+		result[idx] = "127.0.0.1:" + strconv.Itoa(10000+idx)
+	}
+	return result
+}
+
 // ------------------------------------------UTILITY FUNCTIONS FOR FS---------------------------------------------
 func marshalFSmsg(message FSmessage) []byte {
 	//marshal the message to json

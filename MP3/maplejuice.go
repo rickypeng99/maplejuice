@@ -8,6 +8,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"io"
 	"os/exec"
 	"math/rand"
 )
@@ -16,9 +17,12 @@ var MJ_PORT string = "10000"
 // var MASTER_NODE_MJ string = "fa20-cs425-g35-01.cs.illinois.edu:7000"
 var MASTER_NODE_MJ string = "127.0.0.1:10000"
 
-// only the master is maintaining this
+// only the master is maintaining these channels
 var ackChannel = make(chan ACKmessage)
+var failChannel = make(chan string) // fs_master -> mj_master
 
+
+var MJ_NODES = make_mj_nodes()
 
 // MJ command
 type MJcommand struct {
@@ -35,7 +39,7 @@ type MJmessage struct {
 	Hostname      string // sender
 	Info_Hostname string // Some messages carry infos of other hostnames
 	Command 	  MJcommand
-	// (for instance PUT needs to tell other nodes which node to fetch the data)
+	Filenames	  []string
 }
 
 // master -> master
@@ -43,6 +47,7 @@ type ACKmessage struct {
 	Type string // command ack type
 	Hostname string
 	Filename string
+	// InputFile string // original input file name
 }
 
 type MJserver struct {
@@ -295,28 +300,185 @@ func mjMessageHandler(server *MJserver, fs_server *FSserver, membership_server *
 		// commands that only the master node will be handling
 		switch message.MessageType {
 			case MAPLE_INIT:
-				// initiating maple process
-				init_maple(message.Command)
+				// initiating & monitoring maple process
+				init_maple(message.Command, fs_server)
 			case JUICE_INIT:
-				init_juice(message.Command)
+				// initiating & monitoring juice process
+				init_juice(message.Command, fs_server)
+			case MAPLE_ACK:
+				constructACK(MAPLE_ACK, message)
+			case JUICE_ACK:
+				constructACK(JUICE_ACK, message)
 		}
+	}
+	switch message.MessageType {
+		case MAPLE:
+			// TODO: Maple; Run the exe, transfer the file to master and send ack
+		case JUICE:
+			break
+	}
+}
+/**
+INIT MAPLE / JUICE FUNCTIONS, ONLY EXECUTABLE BY MASTERS
+**/
+func init_maple(command MJcommand, fs_server *FSserver) {
+	// get all files in master's sdfs folder
+	// sub folder input by user; Typically, it should be sdfsFiles/<command.Dir>/inputFiles
+	dirName := command.Dir
+	var allFiles []string
+	for key, _ := range fs_server.Files {
+		// traverse key, which should be <command.Dir>/inputFiles
+		file_info := strings.Split(key, "/")
+		if len(file_info) == 2 && file_info[0] == dirName {
+			allFiles = append(allFiles, key)
+		}
+	}
+
+	// hash-partition the files
+	// num_maples, err := strconv.Atoi(command.Num)
+	total_files := len(allFiles)
+	partition_res := make(map[string][]string)
+	nodes_length := len(MJ_NODES)
+	for index, file := range allFiles {
+		// TODO: change to running nodes only later
+		node_index := index % nodes_length
+		// let master remember the distribution
+		partition_res[MJ_NODES[node_index]] = append(partition_res[MJ_NODES[node_index]], file)
+	}
+
+	// send file infos to corresponding nodes
+	sendInputFileToNodes(partition_res, MAPLE, command)
+
+	// wait for ack messages
+	go monitorMapleACK(total_files, allFiles, partition_res, command)
+
+}
+
+func init_juice(command MJcommand, fs_server *FSserver) {
+
+}
+
+func monitorMapleACK(total_files int, allFiles []string, partition_res map[string][]string, command MJcommand) {
+	num_acks := 0
+	// list of files paths; each node will return a path that contains multiple files
+	var intermediate_files []string
+	// files_ack_map := make(map[string]bool)
+	// for _, file := range allFiles {
+	// 	files_ack_map[file] = false
+	// }
+	host_ack_map := make(map[string]bool)
+	for key, _ := range partition_res {
+		host_ack_map[key] = false
+	}
+	for num_acks < len(partition_res) {
+		select {
+			case ackMessage := <- ackChannel:
+				if ackMessage.Type == MAPLE_ACK {
+					intermediate_files = append(intermediate_files, ackMessage.Filename)
+					// files_ack_map[ackMessage.InputFile] = true
+					host_ack_map[ackMessage.Hostname] = true
+					num_acks += 1
+				}
+			case failed_host := <- failChannel:
+				if _, ok := partition_res[failed_host]; ok{
+					// failed_files := partition_res[failed_host]
+					// var reschedules_files []string
+					// for _, file := range failed_files {
+					// 	if !files_ack_map[file] {
+					// 		// this file has not been acked, needs to be rescheduled
+					// 		reschedules_files = append(reschedules_files, file)
+					// 	}
+					// }
+					// reschedules_files_length := len(reschedules_files)
+					// partition_res_temp := make(map[string][]string)
+					// for index, file := range reschedules_files {
+					// 	// TODO: change to running nodes only later
+					// 	node_index := index % len(MJ_NODES)
+					// 	partition_res_temp[MJ_NODES[node_index]] = append(partition_res_temp[MJ_NODES[node_index]], file)
+					// 	// add to original partition res as well
+					// 	partition_res[MJ_NODES[node_index]] = append(partition_res[MJ_NODES[node_index]], file)
+					// }
+
+					// send new-scheduled files to corresponding nodes
+					if !host_ack_map[failed_host] {
+						var host string
+						for _, node := range MJ_NODES {
+							// TODO: if this one is running
+							host = node
+							break
+						}
+						partition_res_temp := make(map[string][]string)
+						partition_res_temp[host] = partition_res[failed_host]
+						sendInputFileToNodes(partition_res_temp, MAPLE, command)
+					}
+				}
+
+		}
+
+	}
+	// combine all intermediate files
+	// other nodes will scp the filename (o_append for multiple files to one single file) to master when sending ack
+
+	// https://stackoverflow.com/questions/52704109/how-to-merge-or-combine-2-files-into-single-file
+	combinedName := MASTER_NODE_MJ + " " + "combined_" + command.Prefix
+	out, err := os.OpenFile(combinedName, os.O_CREATE|os.O_WRONLY, 0644)
+	for _, file := range intermediate_files {
+		zipIn, err := os.Open(local_folder_path	+ file)
+		if err != nil {
+			log.Fatalln("failed to open zip for reading:", err)
+		}
+		defer zipIn.Close()
+		n, err := io.Copy(out, zipIn)
+		if err != nil {
+			log.Fatalln("failed to append zip file to output:", err)
+		}
+	}
+
+	fmt.Printf("Finished maple for prefix: %s\n", command.Prefix)
+}
+
+func constructACK(msgType string, message MJmessage) {
+	var ackMessage ACKmessage = ACKmessage {
+		Type: msgType,
+		Hostname: message.Hostname,
+		Filename: message.Filenames[0],
+		// InputFile: message.Filenames[1],
+	}
+	ackChannel <- ackMessage
+}
+
+func sendInputFileToNodes(partition_res map[string][]string, msgType string, command MJcommand) {
+	for key, files := range partition_res {
+		send_to_nodes_mj(key, msgType, files, command)
 	}
 }
 
-func init_maple(command MJcommand) {
-	// get all files under the directory
-	// files = command
 
+// master -> nodes
+func send_to_nodes_mj(dstHostname string, msgType string, inputFiles []string, command MJcommand) {
+	// socket, err := net.Dial("udp", dstHostname+":"+MJ_PORT)
+	socket, err := net.Dial("udp", dstHostname)
+	if err != nil {
+		fmt.Printf("Error: dialing UDP to master : %s\n", msgType)
+	}
+	var message MJmessage = MJmessage{
+		MessageType:   msgType,
+		Hostname:      MASTER_NODE_MJ,
+		Info_Hostname: MASTER_NODE_MJ,
+		Command: command,
+		Filenames: inputFiles,
+	}
+	//marshal the message to json
+	var marshaledMsg []byte = marshalMJmsg(message)
+
+	// write to the socket
+	_, err = socket.Write(marshaledMsg)
+	if err != nil {
+		fmt.Printf("Error: Writing %s message to the master node: %s\n", msgType, err)
+	}
 }
 
-func init_juice(command MJcommand) {
-
-}
-
-
-
-
-// sending GET / PUT / DELETE / REPLICATE_COMPLETE commands (to master)
+// all nodes send maple related messages -> master
 func send_to_master_mj(server *MJserver, msgType string, command MJcommand) {
 	// socket, err := net.Dial("udp", MASTER_NODE+":"+FS_PORT)
 	socket, err := net.Dial("udp", MASTER_NODE_MJ)
@@ -324,11 +486,13 @@ func send_to_master_mj(server *MJserver, msgType string, command MJcommand) {
 	if err != nil {
 		fmt.Printf("Error: dialing UDP to master : %s\n", msgType)
 	}
+	var temp []string
 	var message MJmessage = MJmessage{
 		MessageType:   msgType,
 		Hostname:      server.Hostname,
 		Info_Hostname: server.Hostname,
 		Command: command,
+		Filenames: temp,
 	}
 	//marshal the message to json
 	var marshaledMsg []byte = marshalMJmsg(message)
