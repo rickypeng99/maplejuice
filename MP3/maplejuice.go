@@ -409,16 +409,77 @@ func init_maple(command MJcommand, fs_server *FSserver) {
 	sendInputFileToNodes(partition_res, MAPLE, command)
 
 	// wait for ack messages
-	go monitorMapleACK(total_files, allFiles, partition_res, command)
+	go monitorMapleACK(allFiles, partition_res, command)
 
 }
 
 func init_juice(command MJcommand, fs_server *FSserver) {
-	// TODO: get files from maple and extract the keys
+	// TODO: get the combined from maple
+	prefix := command.Prefix
+	combinedName := getCombinedName(prefix)
+	if _, err := os.Stat(combinedName); os.IsNotExist(err) {
+		// if directory does not exist 
+		fmt.Printf("INIT_JUICE: Prefix %s does not exist on master\n", prefix)
+		return
+	}
 	
+	// extract from combined file to create dictionary
+	var kv map[string][]string
+	fd, err := os.Open(combinedName)
+	if err != nil{
+		fmt.Printf("Unable to open file:%s\n", combinedName)
+	}
+	defer fd.Close()
+
+	scanner := bufio.NewScanner(fd)
+	for scanner.Scan(){
+		line := scanner.Text()
+		key_val := strings.Split(line, ",")
+		kv[key_val[0]] = append(kv[key_val[0]], key_val[1])
+	}
+
+	// write to seperated key files and distributed keys to workers
+	partition_res := make(map[string][]string)
+	var allKeys []string
+	index := 0
+	// TODO: change to running nodes
+	nodes_length := len(MJ_NODES)
+	for key, val := range kv {
+		allKeys = append(allKeys, key)
+		actualFilename := prefix + "/" + key
+		filename := local_folder_path + prefix + "/" + key
+		fd, err :=  os.OpenFile(filename, os.O_CREATE|os.O_WRONLY, 0666)
+		if err != nil {
+			fmt.Println("INIT_JUICE: Error writing to file:%s ", filename, err)
+			return
+		}
+		writer := bufio.NewWriter(fd)
+		// fmt.Println(writer.key)
+		for eachVal := range val {
+			fmt.Println(writer, eachVal)
+		}
+		writer.Flush()
+		fd.Close()
+		// distribute key to nodes
+		node_index := index % nodes_length
+		partition_res[MJ_NODES[node_index]] = append(partition_res[MJ_NODES[node_index]], key)
+		// put the key file (TODO: remember to create prefix folder in every node)
+		send_to_master(fs_server, actualFilename, actualFilename, PUT)
+		index += 1
+	}
+
+	// distribute jobs
+	sendInputFileToNodes(partition_res, JUICE, command)	
+
+	// wait for ack messages
+	go monitorJuiceACK(allKeys, partition_res, command)
 }
 
-func monitorMapleACK(total_files int, allFiles []string, partition_res map[string][]string, command MJcommand) {
+func monitorJuiceACK(allKeys []string, partition_res map[string][]string, command MJcommand) {
+	// TODO: monitor juice_acks
+}
+
+func monitorMapleACK(allFiles []string, partition_res map[string][]string, command MJcommand) {
 	num_acks := 0
 	// list of files paths; each node will return a path that contains multiple files
 	var intermediate_files []string
@@ -463,7 +524,7 @@ func monitorMapleACK(total_files int, allFiles []string, partition_res map[strin
 	// other nodes will scp the filename (o_append for multiple files to one single file) to master when sending ack
 
 	// https://stackoverflow.com/questions/52704109/how-to-merge-or-combine-2-files-into-single-file
-	combinedName := MASTER_NODE_MJ + " " + "combined_" + command.Prefix
+	combinedName := getCombinedName(command.Prefix)
 	out, err := os.OpenFile(combinedName, os.O_CREATE|os.O_WRONLY, 0644)
 	for _, file := range intermediate_files {
 		zipIn, err := os.Open(local_folder_path	+ file)
@@ -479,6 +540,7 @@ func monitorMapleACK(total_files int, allFiles []string, partition_res map[strin
 
 	fmt.Printf("Finished maple for prefix: %s\n", command.Prefix)
 }
+
 
 func constructACK(msgType string, message MJmessage) {
 	var ackMessage ACKmessage = ACKmessage {

@@ -11,6 +11,10 @@ import (
 
 )
 // ------------------------------------------UTILITY FUNCTIONS FOR MAPLE JUICE---------------------------------------------
+func getCombinedName(prefix string) string {
+	return sdfs_folder_path + MASTER_NODE_MJ + " " + "combined_" + prefix
+}
+
 func marshalMJmsg(message MJmessage) []byte {
 	//marshal the message to json
 	marshaledMsg, err := json.Marshal(message)
