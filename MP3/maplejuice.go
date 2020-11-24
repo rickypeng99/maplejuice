@@ -20,7 +20,7 @@ var MASTER_NODE_MJ string = "127.0.0.1:10000"
 // only the master is maintaining these channels
 var ackChannel = make(chan ACKmessage)
 var failChannel = make(chan string) // fs_master -> mj_master
-
+var getAckChannel = make(chan FSmessage) // fs_node -> mj_node
 
 var MJ_NODES = make_mj_nodes()
 
@@ -255,10 +255,25 @@ func mjCommandReader(mj_server *MJserver, fs_server *FSserver, membership_server
 					Prefix: fileInfos[2],
 					Dir: fileInfos[3],
 				}
-				send_to_master_mj(mj_server, MAPLE_INIT, command_temp)
+				send_to_master_mj(mj_server, MAPLE_INIT, command_temp, "")
 			case "juice":
-				// 
-				break
+				fmt.Println("Please input <juice_exe> <num_juices> <sdfs_intermediate_filename_prefix> <sdfs_dest_filename>")
+				sentence, err = reader.ReadBytes('\n')
+				if err != nil {
+					fmt.Printf("command read error! show\n")
+				}
+				fileInfos := strings.Split(string(sentence), " ")
+				if len(fileInfos) != 4 {
+					fmt.Println("Please input <juice_exe> <num_juices> <sdfs_intermediate_filename_prefix> <sdfs_dest_filename>")
+					break
+				}
+				var command_temp MJcommand = MJcommand {
+					Exe: fileInfos[0],
+					Num: fileInfos[1],
+					Prefix: fileInfos[2],
+					Dir: fileInfos[3],
+				}
+				send_to_master_mj(mj_server, JUICE_INIT, command_temp, "")
 
 		}
 	}
@@ -313,7 +328,51 @@ func mjMessageHandler(server *MJserver, fs_server *FSserver, membership_server *
 	}
 	switch message.MessageType {
 		case MAPLE:
-			// TODO: Maple; Run the exe, transfer the file to master and send ack
+			// Run the exe, transfer the file to master and send ack
+			command := message.Command
+			files := message.Filenames
+			dir := command.Dir
+			files_to_get := 0
+			files_to_get_map := make(map[string]bool)
+			for _, file := range files {
+				if _, ok := fs_server.Files[file]; !ok {
+					// node's server doesn't have the file
+					send_to_master(fs_server, file, file, GET)
+					files_to_get += 1
+					files_to_get_map[file] = true
+				}
+			}
+			acked_files := 0
+			var got_files []string
+			// wait for downloading all files
+			for acked_files < files_to_get {
+				fs_message := <- getAckChannel
+				if _, ok := files_to_get_map[fs_message.LocalFilename]; ok {
+					acked_files += 1
+					got_files = append(got_files, fs_message.LocalFilename)
+				}
+			}
+			for _, file := range got_files {
+				// execute each input file
+				exe := command.Exe
+				localFilename := local_folder_path + file
+				output_file := "output_" + server.Hostname
+				output_path := local_folder_path + output_file
+				_, err := exec.Command(exe, localFilename, output_path).Output()
+				if err != nil {
+					log.Printf("Unable to execute command:%s on input file:%s. Error:%s\n",
+										exe, localFilename, err)
+				}
+				// send the file to master
+				dstPath := MASTER_NODE_MJ + ":" + sdfs_folder_path + localFilename
+				fromPath := output_path
+				cmd := exec.Command("scp", fromPath, dstPath)
+				fmt.Println(cmd)
+				err = cmd.Run()
+				fmt.Println(err)
+				// send maple_ack to master
+				send_to_master_mj(server, MAPLE_ACK, command, output_file)
+			}
 		case JUICE:
 			break
 	}
@@ -355,7 +414,8 @@ func init_maple(command MJcommand, fs_server *FSserver) {
 }
 
 func init_juice(command MJcommand, fs_server *FSserver) {
-
+	// TODO: get files from maple and extract the keys
+	
 }
 
 func monitorMapleACK(total_files int, allFiles []string, partition_res map[string][]string, command MJcommand) {
@@ -381,23 +441,6 @@ func monitorMapleACK(total_files int, allFiles []string, partition_res map[strin
 				}
 			case failed_host := <- failChannel:
 				if _, ok := partition_res[failed_host]; ok{
-					// failed_files := partition_res[failed_host]
-					// var reschedules_files []string
-					// for _, file := range failed_files {
-					// 	if !files_ack_map[file] {
-					// 		// this file has not been acked, needs to be rescheduled
-					// 		reschedules_files = append(reschedules_files, file)
-					// 	}
-					// }
-					// reschedules_files_length := len(reschedules_files)
-					// partition_res_temp := make(map[string][]string)
-					// for index, file := range reschedules_files {
-					// 	// TODO: change to running nodes only later
-					// 	node_index := index % len(MJ_NODES)
-					// 	partition_res_temp[MJ_NODES[node_index]] = append(partition_res_temp[MJ_NODES[node_index]], file)
-					// 	// add to original partition res as well
-					// 	partition_res[MJ_NODES[node_index]] = append(partition_res[MJ_NODES[node_index]], file)
-					// }
 
 					// send new-scheduled files to corresponding nodes
 					if !host_ack_map[failed_host] {
@@ -479,7 +522,7 @@ func send_to_nodes_mj(dstHostname string, msgType string, inputFiles []string, c
 }
 
 // all nodes send maple related messages -> master
-func send_to_master_mj(server *MJserver, msgType string, command MJcommand) {
+func send_to_master_mj(server *MJserver, msgType string, command MJcommand, file string) {
 	// socket, err := net.Dial("udp", MASTER_NODE+":"+FS_PORT)
 	socket, err := net.Dial("udp", MASTER_NODE_MJ)
 	// socket, err := net.Dial("udp", INTRODUCER)
@@ -487,6 +530,9 @@ func send_to_master_mj(server *MJserver, msgType string, command MJcommand) {
 		fmt.Printf("Error: dialing UDP to master : %s\n", msgType)
 	}
 	var temp []string
+	if file != "" {
+		temp = append(temp, file)
+	}
 	var message MJmessage = MJmessage{
 		MessageType:   msgType,
 		Hostname:      server.Hostname,

@@ -488,6 +488,8 @@ func fsMessageHandler(server *FSserver, resp []byte, bytes_read int, membership_
 			fmt.Println(cmd)
 			err := cmd.Run()
 			fmt.Println(err)
+			// telling the maple juice port that the file has arrived
+			getAckChannel <- message
 
 		case GET_WAIT:
 			fmt.Printf("GET_WAIT: The file %s is still being updating by other servers. Please wait until the write finishes\n", message.SdfsFilename)
