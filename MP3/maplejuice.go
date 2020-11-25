@@ -10,7 +10,6 @@ import (
 	"strings"
 	"io"
 	"os/exec"
-	"math/rand"
 )
 
 var MJ_PORT string = "10000"
@@ -27,10 +26,10 @@ var MJ_NODES = make_mj_nodes()
 // MJ command
 type MJcommand struct {
 	Type string
-	Exe string
-	Num string
+	Exe string // application to run
+	Num string // num of workers
 	Prefix string
-	Dir string
+	Dir string // input file directory for maple, or dest filname for juice
 }
 
 // MJ Message struct - master -> nodes
@@ -56,9 +55,9 @@ type MJserver struct {
 }
 
 const (
-	MAPLE_INIT string = "MAPLE_INIT"
-	MAPLE string = "MAPLE"
-	MAPLE_ACK string = "MAPLE_ACK"
+	MAPLE_INIT string = "MAPLE_INIT" // node -> master, telling master to initiate a maple process
+	MAPLE string = "MAPLE" // master -> nodes, master gives the nodes the input files and let them execute the application
+	MAPLE_ACK string = "MAPLE_ACK" // node -> master, sent after the node has copied the output file to master
 	JUICE_INIT string = "JUICE_INIT"
 	JUICE string = "JUICE"
 	JUICE_ACK string = "JUICE_ACK"
@@ -81,14 +80,16 @@ func main() {
 	if err != nil {
 		fmt.Printf("Error: strconv.Atoi from %s\n", hostname)
 	}
+	MJ_PORT = strconv.Itoa(portInt)
 	portInt -= 1000
 	FS_PORT = strconv.Itoa(portInt)
 	portInt -= 1000
+	// membership port
 	PORT = strconv.Itoa(portInt)
 	// membership_hostname := hostname
 	// hostname += ":" + MJ_PORT
-	membership_hostname := "127.0.0.1:" + PORT
 	fs_hostname := "127.0.0.1:" + FS_PORT
+	membership_hostname := "127.0.0.1:" + PORT
 
 	fmt.Printf("MapleJuice is at: %s\n", hostname)
 	fmt.Printf("SDFS is at: %s\n", fs_hostname)
@@ -99,6 +100,7 @@ func main() {
 	membership_server := init_membership_server(membership_hostname, PORT)
 
 	if (hostname == MASTER_NODE) {
+		// init data structures only for master fs
 		init_master_node()
 	}
 
@@ -158,7 +160,10 @@ func mjCommandReader(mj_server *MJserver, fs_server *FSserver, membership_server
 - get: get a file from the SDFS
 - delete: delete a file from the SDFS
 - store: show the files stored on the current node
-- ls: show the positions that a particular file is stored at`)
+- ls: show the positions that a particular file is stored at
+---------------Maple Juice related
+- maple: execute maple process
+- juice: execute juice process`)
 			case "ls":
 				// show memberlist
 				for _, membership := range membership_server.MembershipMap {
@@ -321,6 +326,7 @@ func mjMessageHandler(server *MJserver, fs_server *FSserver, membership_server *
 				// initiating & monitoring juice process
 				init_juice(message.Command, fs_server)
 			case MAPLE_ACK:
+				// construct an ACK message and send it into the channel
 				constructACK(MAPLE_ACK, message)
 			case JUICE_ACK:
 				constructACK(JUICE_ACK, message)
@@ -329,52 +335,12 @@ func mjMessageHandler(server *MJserver, fs_server *FSserver, membership_server *
 	switch message.MessageType {
 		case MAPLE:
 			// Run the exe, transfer the file to master and send ack
-			command := message.Command
-			files := message.Filenames
-			dir := command.Dir
-			files_to_get := 0
-			files_to_get_map := make(map[string]bool)
-			for _, file := range files {
-				if _, ok := fs_server.Files[file]; !ok {
-					// node's server doesn't have the file
-					send_to_master(fs_server, file, file, GET)
-					files_to_get += 1
-					files_to_get_map[file] = true
-				}
-			}
-			acked_files := 0
-			var got_files []string
-			// wait for downloading all files
-			for acked_files < files_to_get {
-				fs_message := <- getAckChannel
-				if _, ok := files_to_get_map[fs_message.LocalFilename]; ok {
-					acked_files += 1
-					got_files = append(got_files, fs_message.LocalFilename)
-				}
-			}
-			for _, file := range got_files {
-				// execute each input file
-				exe := command.Exe
-				localFilename := local_folder_path + file
-				output_file := "output_" + server.Hostname
-				output_path := local_folder_path + output_file
-				_, err := exec.Command(exe, localFilename, output_path).Output()
-				if err != nil {
-					log.Printf("Unable to execute command:%s on input file:%s. Error:%s\n",
-										exe, localFilename, err)
-				}
-				// send the file to master
-				dstPath := MASTER_NODE_MJ + ":" + sdfs_folder_path + localFilename
-				fromPath := output_path
-				cmd := exec.Command("scp", fromPath, dstPath)
-				fmt.Println(cmd)
-				err = cmd.Run()
-				fmt.Println(err)
-				// send maple_ack to master
-				send_to_master_mj(server, MAPLE_ACK, command, output_file)
-			}
+			got_files := fetchInputFiles(message, fs_server)
+			executeInputFile(message, got_files, server)
+			
 		case JUICE:
-			break
+			got_files := fetchInputFiles(message, fs_server)
+			executeInputFile(message, got_files, server)
 	}
 }
 /**
@@ -395,7 +361,6 @@ func init_maple(command MJcommand, fs_server *FSserver) {
 
 	// hash-partition the files
 	// num_maples, err := strconv.Atoi(command.Num)
-	total_files := len(allFiles)
 	partition_res := make(map[string][]string)
 	nodes_length := len(MJ_NODES)
 	for index, file := range allFiles {
@@ -409,14 +374,14 @@ func init_maple(command MJcommand, fs_server *FSserver) {
 	sendInputFileToNodes(partition_res, MAPLE, command)
 
 	// wait for ack messages
-	go monitorMapleACK(allFiles, partition_res, command)
+	go monitorACK(allFiles, partition_res, command)
 
 }
 
 func init_juice(command MJcommand, fs_server *FSserver) {
 	// TODO: get the combined from maple
 	prefix := command.Prefix
-	combinedName := getCombinedName(prefix)
+	combinedName := getCombinedName(prefix, JUICE)
 	if _, err := os.Stat(combinedName); os.IsNotExist(err) {
 		// if directory does not exist 
 		fmt.Printf("INIT_JUICE: Prefix %s does not exist on master\n", prefix)
@@ -447,10 +412,10 @@ func init_juice(command MJcommand, fs_server *FSserver) {
 	for key, val := range kv {
 		allKeys = append(allKeys, key)
 		actualFilename := prefix + "/" + key
-		filename := local_folder_path + prefix + "/" + key
+		filename := local_folder_path + actualFilename
 		fd, err :=  os.OpenFile(filename, os.O_CREATE|os.O_WRONLY, 0666)
 		if err != nil {
-			fmt.Println("INIT_JUICE: Error writing to file:%s ", filename, err)
+			fmt.Println("INIT_JUICE: Error writing to file:%s\n", filename)
 			return
 		}
 		writer := bufio.NewWriter(fd)
@@ -472,14 +437,17 @@ func init_juice(command MJcommand, fs_server *FSserver) {
 	sendInputFileToNodes(partition_res, JUICE, command)	
 
 	// wait for ack messages
-	go monitorJuiceACK(allKeys, partition_res, command)
+	go monitorACK(allKeys, partition_res, command)
 }
 
-func monitorJuiceACK(allKeys []string, partition_res map[string][]string, command MJcommand) {
-	// TODO: monitor juice_acks
-}
-
-func monitorMapleACK(allFiles []string, partition_res map[string][]string, command MJcommand) {
+func monitorACK(allFiles []string, partition_res map[string][]string, command MJcommand) {
+	command_type := command.Type
+	var ack_type string
+	if command_type == MAPLE {
+		ack_type = MAPLE_ACK
+	} else {
+		ack_type = JUICE_ACK
+	}
 	num_acks := 0
 	// list of files paths; each node will return a path that contains multiple files
 	var intermediate_files []string
@@ -494,7 +462,7 @@ func monitorMapleACK(allFiles []string, partition_res map[string][]string, comma
 	for num_acks < len(partition_res) {
 		select {
 			case ackMessage := <- ackChannel:
-				if ackMessage.Type == MAPLE_ACK {
+				if ackMessage.Type == ack_type {
 					intermediate_files = append(intermediate_files, ackMessage.Filename)
 					// files_ack_map[ackMessage.InputFile] = true
 					host_ack_map[ackMessage.Hostname] = true
@@ -513,7 +481,7 @@ func monitorMapleACK(allFiles []string, partition_res map[string][]string, comma
 						}
 						partition_res_temp := make(map[string][]string)
 						partition_res_temp[host] = partition_res[failed_host]
-						sendInputFileToNodes(partition_res_temp, MAPLE, command)
+						sendInputFileToNodes(partition_res_temp, command_type, command)
 					}
 				}
 
@@ -524,8 +492,8 @@ func monitorMapleACK(allFiles []string, partition_res map[string][]string, comma
 	// other nodes will scp the filename (o_append for multiple files to one single file) to master when sending ack
 
 	// https://stackoverflow.com/questions/52704109/how-to-merge-or-combine-2-files-into-single-file
-	combinedName := getCombinedName(command.Prefix)
-	out, err := os.OpenFile(combinedName, os.O_CREATE|os.O_WRONLY, 0644)
+	combinedName := getCombinedName(command.Prefix, command_type)
+	out, _ := os.OpenFile(combinedName, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644)
 	for _, file := range intermediate_files {
 		zipIn, err := os.Open(local_folder_path	+ file)
 		if err != nil {
@@ -534,13 +502,81 @@ func monitorMapleACK(allFiles []string, partition_res map[string][]string, comma
 		defer zipIn.Close()
 		n, err := io.Copy(out, zipIn)
 		if err != nil {
-			log.Fatalln("failed to append zip file to output:", err)
+			log.Printf("%s\n", n)
+			log.Fatalf("failed to append zip file to output:", err)
 		}
 	}
 
 	fmt.Printf("Finished maple for prefix: %s\n", command.Prefix)
 }
 
+func fetchInputFiles(message MJmessage, fs_server *FSserver) []string{
+	if message.MessageType == MAPLE {
+		// nodes create a folder named <prefix> upon receiving MAPLE; It will later retrieve key files during the JUICE phase from this folder
+		path := local_folder_path + message.Command.Prefix + "/"
+		if _, err := os.Stat(path); os.IsNotExist(err) {
+			// if prefix directory does not exist 
+			err := os.Mkdir(path, 0755)
+			if err != nil {
+				log.Fatal(err)
+			}
+		}
+	} 
+	files := message.Filenames
+	files_to_get := 0
+	files_to_get_map := make(map[string]bool)
+	for _, file := range files {
+		if _, ok := fs_server.Files[file]; !ok {
+			// node's server doesn't have the file
+			send_to_master(fs_server, file, file, GET)
+			files_to_get += 1
+			files_to_get_map[file] = true
+		}
+	}
+	acked_files := 0
+	var got_files []string
+	// wait for downloading all files
+	for acked_files < files_to_get {
+		fs_message := <- getAckChannel
+		if _, ok := files_to_get_map[fs_message.LocalFilename]; ok {
+			acked_files += 1
+			got_files = append(got_files, fs_message.LocalFilename)
+		}
+	}
+	return got_files
+
+}
+
+func executeInputFile(message MJmessage, got_files []string, server *MJserver) {
+	command := message.Command
+	var ack_type string
+	if message.MessageType == MAPLE {
+		ack_type = MAPLE_ACK
+	} else {
+		ack_type = JUICE_ACK
+	}
+	for _, file := range got_files {
+		// execute each input file
+		exe := command.Exe
+		localFilename := local_folder_path + file
+		output_file := "output_" + server.Hostname
+		output_path := local_folder_path + output_file
+		_, err := exec.Command(exe, localFilename, output_path).Output()
+		if err != nil {
+			log.Printf("Unable to execute command:%s on input file:%s. Error:%s\n",
+								exe, localFilename, err)
+		}
+		// send the file to master
+		dstPath := MASTER_NODE_MJ + ":" + localFilename
+		fromPath := output_path
+		cmd := exec.Command("scp", fromPath, dstPath)
+		fmt.Println(cmd)
+		err = cmd.Run()
+		// fmt.Println(err)
+		// send maple_ack to master
+		send_to_master_mj(server, ack_type, command, output_file)
+	}
+}
 
 func constructACK(msgType string, message MJmessage) {
 	var ackMessage ACKmessage = ACKmessage {

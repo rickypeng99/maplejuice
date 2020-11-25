@@ -11,8 +11,9 @@ import (
 
 )
 // ------------------------------------------UTILITY FUNCTIONS FOR MAPLE JUICE---------------------------------------------
-func getCombinedName(prefix string) string {
-	return sdfs_folder_path + MASTER_NODE_MJ + " " + "combined_" + prefix
+func getCombinedName(prefix string, cmdType string) string {
+	// cmdType: MAPLE OR JUICE
+	return local_folder_path + MASTER_NODE_MJ + " " + "combined_" + cmdType + "_" + prefix
 }
 
 func marshalMJmsg(message MJmessage) []byte {
