@@ -13,8 +13,8 @@ import (
 )
 // fa20-cs425-g35-01.cs.illinois.edu
 var FS_PORT string = "9000"
-var MASTER_NODE string = "fa20-cs425-g35-01.cs.illinois.edu:9000"
-// var MASTER_NODE string = "127.0.0.1:9000"
+// var MASTER_NODE string = "fa20-cs425-g35-01.cs.illinois.edu:9000"
+var MASTER_NODE string = "127.0.0.1:9000"
 
 // to satisfy at most 3 failures, we need to have 4 replicas
 // replicas will be created using SCP command
@@ -452,8 +452,8 @@ func fsMessageHandler(server *FSserver, resp []byte, bytes_read int, membership_
 	// commands that all nodes will be handling
 	switch message.MessageType {
 		case REPLICATE:
-			fromPath := "qingyih2@" + remove_port_from_hostname(message.Info_Hostname) + ":" + local_folder_path + message.LocalFilename
-			// fromPath := "rickypeng99@" + remove_port_from_hostname(message.Info_Hostname) + ":" + local_folder_path + message.LocalFilename
+			// fromPath := "qingyih2@" + remove_port_from_hostname(message.Info_Hostname) + ":" + local_folder_path + message.LocalFilename
+			fromPath := "rickypeng99@" + remove_port_from_hostname(message.Info_Hostname) + ":" + local_folder_path + message.LocalFilename
 			dstPath := sdfs_folder_path + message.SdfsFilename
 			// TODO: try to implement TCP file transfer instead of using the built in command
 			cmd := exec.Command("scp", fromPath, dstPath)
@@ -465,8 +465,8 @@ func fsMessageHandler(server *FSserver, resp []byte, bytes_read int, membership_
 			send_to_master(server, message.LocalFilename, message.SdfsFilename, REPLICATE_COMPLETE)
 		
 		case RE_REPLICATE:
-			fromPath := "qingyih2@" + remove_port_from_hostname(message.Info_Hostname) + ":" + sdfs_folder_path + message.SdfsFilename
-			// fromPath := "rickypeng99@" + remove_port_from_hostname(message.Info_Hostname) + ":" + sdfs_folder_path + message.SdfsFilename
+			// fromPath := "qingyih2@" + remove_port_from_hostname(message.Info_Hostname) + ":" + sdfs_folder_path + message.SdfsFilename
+			fromPath := "rickypeng99@" + remove_port_from_hostname(message.Info_Hostname) + ":" + sdfs_folder_path + message.SdfsFilename
 			dstPath := sdfs_folder_path + message.SdfsFilename
 			cmd := exec.Command("scp", fromPath, dstPath)
 			fmt.Println(cmd)
@@ -481,8 +481,8 @@ func fsMessageHandler(server *FSserver, resp []byte, bytes_read int, membership_
 			delete(server.Files, message.SdfsFilename)
 
 		case GET_ACK:
-			fromPath := "qingyih2@" + remove_port_from_hostname(message.Info_Hostname) + ":" + sdfs_folder_path + message.SdfsFilename
-			// fromPath := "rickypeng99@" + remove_port_from_hostname(message.Info_Hostname) + ":" + sdfs_folder_path + message.SdfsFilename
+			// fromPath := "qingyih2@" + remove_port_from_hostname(message.Info_Hostname) + ":" + sdfs_folder_path + message.SdfsFilename
+			fromPath := "rickypeng99@" + remove_port_from_hostname(message.Info_Hostname) + ":" + sdfs_folder_path + message.SdfsFilename
 			dstPath := local_folder_path + message.LocalFilename
 			cmd := exec.Command("scp", fromPath, dstPath)
 			fmt.Println(cmd)
