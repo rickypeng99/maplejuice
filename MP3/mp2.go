@@ -20,8 +20,8 @@ var MASTER_NODE string = "127.0.0.1:9000"
 // replicas will be created using SCP command
 var REPLICA_MAX int = 4
 
-var sdfs_folder_path = os.Getenv("HOME") + "/cs425_mps_group_35/MP2/sdfsFiles/"
-var local_folder_path = os.Getenv("HOME") + "/cs425_mps_group_35/MP2/localFiles/"
+var sdfs_folder_path = os.Getenv("HOME") + "/cs425_mps_group_35/MP3/sdfsFiles/"
+var local_folder_path = os.Getenv("HOME") + "/cs425_mps_group_35/MP3/localFiles/"
 
 var FS_NODES = make_fs_nodes()
 
@@ -249,9 +249,9 @@ func init_fs_server(hostname string, FS_PORT string) *FSserver{
 
 func init_master_node() {
 	fileDirectory = make(map[string][]string)
-	for _, node := range FS_NODES {
-		fileDirectory[node] = []string{}
-	}
+	// for _, node := range FS_NODES {
+	// 	fileDirectory[node] = []string{}
+	// }
 	getQueue = make(map[string][]FSmessage)
 	isProgressingFilePUT = make(map[string]int)
 }
@@ -460,7 +460,7 @@ func fsMessageHandler(server *FSserver, resp []byte, bytes_read int, membership_
 			fmt.Println(cmd)
 			err := cmd.Run()
 			fmt.Println(err)
-
+			
 			server.Files[message.SdfsFilename] = 1
 			send_to_master(server, message.LocalFilename, message.SdfsFilename, REPLICATE_COMPLETE)
 		

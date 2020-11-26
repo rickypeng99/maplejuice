@@ -99,7 +99,7 @@ func main() {
 	fs_server := init_fs_server(fs_hostname, FS_PORT)
 	membership_server := init_membership_server(membership_hostname, PORT)
 
-	if (hostname == MASTER_NODE) {
+	if (hostname == MASTER_NODE_MJ) {
 		// init data structures only for master fs
 		init_master_node()
 	}
@@ -255,10 +255,11 @@ func mjCommandReader(mj_server *MJserver, fs_server *FSserver, membership_server
 					break
 				}
 				var command_temp MJcommand = MJcommand {
+					Type: MAPLE,
 					Exe: fileInfos[0],
 					Num: fileInfos[1],
 					Prefix: fileInfos[2],
-					Dir: fileInfos[3],
+					Dir: strings.TrimSuffix(fileInfos[3], "\n"),
 				}
 				send_to_master_mj(mj_server, MAPLE_INIT, command_temp, "")
 			case "juice":
@@ -273,10 +274,11 @@ func mjCommandReader(mj_server *MJserver, fs_server *FSserver, membership_server
 					break
 				}
 				var command_temp MJcommand = MJcommand {
+					Type: JUICE,
 					Exe: fileInfos[0],
 					Num: fileInfos[1],
 					Prefix: fileInfos[2],
-					Dir: fileInfos[3],
+					Dir: strings.TrimSuffix(fileInfos[3], "\n"),
 				}
 				send_to_master_mj(mj_server, JUICE_INIT, command_temp, "")
 
@@ -351,13 +353,30 @@ func init_maple(command MJcommand, fs_server *FSserver) {
 	// sub folder input by user; Typically, it should be sdfsFiles/<command.Dir>/inputFiles
 	dirName := command.Dir
 	var allFiles []string
-	for key, _ := range fs_server.Files {
+
+	//------FOR TESTING PURPOSE
+	fileDirectory["input/input1.txt"] = []string {MASTER_NODE}
+	fileDirectory["input/input2.txt"] = []string {MASTER_NODE}
+	fileDirectory["input/input3.txt"] = []string {MASTER_NODE}
+	fileDirectory["input/input4.txt"] = []string {MASTER_NODE}
+	fileDirectory["input/input5.txt"] = []string {MASTER_NODE}
+
+	//------TESTING ENDS
+
+	for key, _ := range fileDirectory {
 		// traverse key, which should be <command.Dir>/inputFiles
 		file_info := strings.Split(key, "/")
+		// fmt.Println(key)
+		// fmt.Println(dirName)
+
 		if len(file_info) == 2 && file_info[0] == dirName {
 			allFiles = append(allFiles, key)
 		}
 	}
+
+	// for _, file := range allFiles {
+	// 	fmt.Println(file)
+	// }
 
 	// hash-partition the files
 	// num_maples, err := strconv.Atoi(command.Num)
@@ -368,6 +387,14 @@ func init_maple(command MJcommand, fs_server *FSserver) {
 		node_index := index % nodes_length
 		// let master remember the distribution
 		partition_res[MJ_NODES[node_index]] = append(partition_res[MJ_NODES[node_index]], file)
+	}
+
+	for key, input_files := range partition_res {
+		fmt.Printf("%s\n", key)
+		for _, file := range input_files {
+			fmt.Printf("%s", file)
+		}
+		fmt.Println("")
 	}
 
 	// send file infos to corresponding nodes
@@ -381,7 +408,7 @@ func init_maple(command MJcommand, fs_server *FSserver) {
 func init_juice(command MJcommand, fs_server *FSserver) {
 	// TODO: get the combined from maple
 	prefix := command.Prefix
-	combinedName := getCombinedName(prefix, JUICE)
+	combinedName := getCombinedName(prefix, MAPLE)
 	if _, err := os.Stat(combinedName); os.IsNotExist(err) {
 		// if directory does not exist 
 		fmt.Printf("INIT_JUICE: Prefix %s does not exist on master\n", prefix)
@@ -389,19 +416,21 @@ func init_juice(command MJcommand, fs_server *FSserver) {
 	}
 	
 	// extract from combined file to create dictionary
-	var kv map[string][]string
+	kv := make(map[string][]string)
 	fd, err := os.Open(combinedName)
 	if err != nil{
 		fmt.Printf("Unable to open file:%s\n", combinedName)
 	}
-	defer fd.Close()
 
 	scanner := bufio.NewScanner(fd)
 	for scanner.Scan(){
 		line := scanner.Text()
 		key_val := strings.Split(line, ",")
+		fmt.Println(key_val[0])
+		fmt.Println(key_val[1])
 		kv[key_val[0]] = append(kv[key_val[0]], key_val[1])
 	}
+	fd.Close()
 
 	// write to seperated key files and distributed keys to workers
 	partition_res := make(map[string][]string)
@@ -413,21 +442,21 @@ func init_juice(command MJcommand, fs_server *FSserver) {
 		allKeys = append(allKeys, key)
 		actualFilename := prefix + "/" + key
 		filename := local_folder_path + actualFilename
-		fd, err :=  os.OpenFile(filename, os.O_CREATE|os.O_WRONLY, 0666)
+		fd, err := os.OpenFile(filename, os.O_CREATE|os.O_WRONLY, 0666)
 		if err != nil {
 			fmt.Println("INIT_JUICE: Error writing to file:%s\n", filename)
 			return
 		}
 		writer := bufio.NewWriter(fd)
 		// fmt.Println(writer.key)
-		for eachVal := range val {
-			fmt.Println(writer, eachVal)
+		for _, eachVal := range val {
+			fmt.Fprintln(writer, key + "," + eachVal)
 		}
 		writer.Flush()
 		fd.Close()
 		// distribute key to nodes
 		node_index := index % nodes_length
-		partition_res[MJ_NODES[node_index]] = append(partition_res[MJ_NODES[node_index]], key)
+		partition_res[MJ_NODES[node_index]] = append(partition_res[MJ_NODES[node_index]], actualFilename)
 		// put the key file (TODO: remember to create prefix folder in every node)
 		send_to_master(fs_server, actualFilename, actualFilename, PUT)
 		index += 1
@@ -459,16 +488,20 @@ func monitorACK(allFiles []string, partition_res map[string][]string, command MJ
 	for key, _ := range partition_res {
 		host_ack_map[key] = false
 	}
+	fmt.Printf("We have distributed the files to %d nodes\n", len(partition_res))
 	for num_acks < len(partition_res) {
 		select {
 			case ackMessage := <- ackChannel:
+				fmt.Printf("Receivec %s from ackChannel!\n", ackMessage.Type)
 				if ackMessage.Type == ack_type {
 					intermediate_files = append(intermediate_files, ackMessage.Filename)
 					// files_ack_map[ackMessage.InputFile] = true
 					host_ack_map[ackMessage.Hostname] = true
 					num_acks += 1
+					fmt.Printf("%d\n", num_acks)
 				}
 			case failed_host := <- failChannel:
+				fmt.Printf("Receivec failure from failChannel!\n")
 				if _, ok := partition_res[failed_host]; ok{
 
 					// send new-scheduled files to corresponding nodes
@@ -513,14 +546,14 @@ func monitorACK(allFiles []string, partition_res map[string][]string, command MJ
 func fetchInputFiles(message MJmessage, fs_server *FSserver) []string{
 	if message.MessageType == MAPLE {
 		// nodes create a folder named <prefix> upon receiving MAPLE; It will later retrieve key files during the JUICE phase from this folder
-		path := local_folder_path + message.Command.Prefix + "/"
-		if _, err := os.Stat(path); os.IsNotExist(err) {
-			// if prefix directory does not exist 
-			err := os.Mkdir(path, 0755)
-			if err != nil {
-				log.Fatal(err)
-			}
-		}
+		// path := local_folder_path + message.Command.Prefix + "/"
+		// if _, err := os.Stat(path); os.IsNotExist(err) {
+		// 	// if prefix directory does not exist 
+		// 	err := os.Mkdir(path, 0755)
+		// 	if err != nil {
+		// 		log.Fatal(err)
+		// 	}
+		// }
 	} 
 	files := message.Filenames
 	files_to_get := 0
@@ -559,7 +592,7 @@ func executeInputFile(message MJmessage, got_files []string, server *MJserver) {
 		// execute each input file
 		exe := command.Exe
 		localFilename := local_folder_path + file
-		output_file := "output_" + server.Hostname
+		output_file := "output_" + message.MessageType + "_" +server.Hostname
 		output_path := local_folder_path + output_file
 		_, err := exec.Command(exe, localFilename, output_path).Output()
 		if err != nil {
@@ -567,12 +600,13 @@ func executeInputFile(message MJmessage, got_files []string, server *MJserver) {
 								exe, localFilename, err)
 		}
 		// send the file to master
-		dstPath := MASTER_NODE_MJ + ":" + localFilename
+
+		dstPath := "rickypeng99@127.0.0.1:" + local_folder_path + output_file + "_master"
 		fromPath := output_path
 		cmd := exec.Command("scp", fromPath, dstPath)
 		fmt.Println(cmd)
 		err = cmd.Run()
-		// fmt.Println(err)
+		fmt.Println(err)
 		// send maple_ack to master
 		send_to_master_mj(server, ack_type, command, output_file)
 	}
@@ -590,6 +624,7 @@ func constructACK(msgType string, message MJmessage) {
 
 func sendInputFileToNodes(partition_res map[string][]string, msgType string, command MJcommand) {
 	for key, files := range partition_res {
+		fmt.Println(key)
 		send_to_nodes_mj(key, msgType, files, command)
 	}
 }
