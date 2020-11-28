@@ -89,7 +89,7 @@ func main() {
 	PORT = strconv.Itoa(portInt)
 
 	membership_hostname := hostname
-	fs_hostname := hostname + FS_PORT
+	fs_hostname := hostname + ":" + FS_PORT
 	hostname += ":" + MJ_PORT
 
 	// for local test
@@ -371,14 +371,19 @@ func init_maple(command MJcommand, fs_server *FSserver) {
 	// get all input files under that directory
 	var local_files []string
 
-    root := local_folder_path + command.Dir + "/"
-    err := filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
-        local_files = append(local_files, path)
-        return nil
-    })
-    if err != nil {
-        panic(err)
-    }
+	root := local_folder_path + command.Dir + "/"
+	err := filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
+		split := strings.Split(path, "/")
+		last := strings.TrimSpace(split[len(split) - 1])
+		if len(last) > 0 {
+			local_files = append(local_files, last)
+		}
+		return nil
+		
+	})
+	if err != nil {
+		panic(err)
+	}
     for _, file := range local_files {
         fileDirectory[command.Dir + "/" + file] = []string {MASTER_NODE}
     }
