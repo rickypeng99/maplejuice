@@ -572,10 +572,21 @@ func monitorACK(allFiles []string, partition_res map[string][]string, command MJ
 func fetchInputFiles(message MJmessage, fs_server *FSserver) []string{
 	if message.MessageType == MAPLE {
 		// nodes create a folder named <prefix> and <input dir> upon receiving MAPLE; It will later retrieve key files during the JUICE phase from this folder
-		path := sdfs_folder_path + message.Command.Prefix + "/"
+
+		path := local_folder_path + message.Command.Prefix + "/"
 
 		if _, err := os.Stat(path); os.IsNotExist(err) {
-			// if prefix directory does not exist 
+			// if prefix directory does not exist at local
+			err := os.Mkdir(path, 0755)
+			if err != nil {
+				log.Fatal(err)
+			}
+		}
+
+		path = sdfs_folder_path + message.Command.Prefix + "/"
+
+		if _, err := os.Stat(path); os.IsNotExist(err) {
+			// if prefix directory does not exist at sdfs
 			err := os.Mkdir(path, 0755)
 			if err != nil {
 				log.Fatal(err)
