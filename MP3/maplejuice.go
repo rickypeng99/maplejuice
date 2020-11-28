@@ -621,7 +621,7 @@ func executeInputFile(message MJmessage, got_files []string, server *MJserver) {
 	}
 	for _, file := range got_files {
 		// execute each input file
-		exe := command.Exe
+		exe := "applications/" + command.Exe
 		localFilename := local_folder_path + file
 		output_file := "output_" + message.MessageType + "_" +server.Hostname
 		output_path := local_folder_path + output_file
@@ -632,7 +632,7 @@ func executeInputFile(message MJmessage, got_files []string, server *MJserver) {
 		}
 		// send the file to master
 
-		dstPath := "rickypeng99@127.0.0.1:" + local_folder_path + output_file + "_master"
+		dstPath := "ruiqip2@" + remove_port_from_hostname(MASTER_NODE_MJ) + ":" + local_folder_path + output_file + "_master"
 		fromPath := output_path
 		cmd := exec.Command("scp", fromPath, dstPath)
 		fmt.Println(cmd)
