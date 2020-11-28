@@ -36,18 +36,18 @@ func unmarshalMJmsg(jsonMsg []byte) MJmessage {
 
 func make_mj_nodes() [10]string {
 	var result [10]string
-	// for idx, _ := range result {
-	// 	var index int = idx + 1
-	// 	if index < 10 {
-	// 		result[idx] = "fa20-cs425-g35-0" + strconv.Itoa(index) + ".cs.illinois.edu:9000"
-	// 	} else {
-	// 		result[idx] = "fa20-cs425-g35-10.cs.illinois.edu:9000"
-	// 	}
-	// }
-	// for local test
 	for idx, _ := range result {
-		result[idx] = "127.0.0.1:" + strconv.Itoa(10000+idx)
+		var index int = idx + 1
+		if index < 10 {
+			result[idx] = "fa20-cs425-g35-0" + strconv.Itoa(index) + ".cs.illinois.edu:10000"
+		} else {
+			result[idx] = "fa20-cs425-g35-10.cs.illinois.edu:10000"
+		}
 	}
+	// for local test
+	// for idx, _ := range result {
+	// 	result[idx] = "127.0.0.1:" + strconv.Itoa(10000+idx)
+	// }
 	return result
 }
 
@@ -123,46 +123,50 @@ func filter_by_non_replica(membership_server *Server, active_replicas []string) 
 
 // membership node transfers to sdfs node
 func to_fs_node(membership_node string) string{
-	temp_array := strings.Split(membership_node, ":")
-	port := temp_array[1]
-	portInt, err := strconv.Atoi(port)
-	if err != nil {
-		fmt.Printf("Error: to_fs_node transfer from %s\n", port)
-	}
-	portInt += 1000 //8000 -> 9000
-	temp_array[1] = strconv.Itoa(portInt)
-	return strings.Join(temp_array, ":")
-	// return membership_node + ":9000"
+	// temp_array := strings.Split(membership_node, ":")
+	// port := temp_array[1]
+	// portInt, err := strconv.Atoi(port)
+	// if err != nil {
+	// 	fmt.Printf("Error: to_fs_node transfer from %s\n", port)
+	// }
+	// portInt += 1000 //8000 -> 9000
+	// temp_array[1] = strconv.Itoa(portInt)
+	// return strings.Join(temp_array, ":")
+
+	// for vm testing
+	return membership_node + ":9000"
 }
 
 // sdfs node transfers to membership node
 func to_membership_node(fs_node string) string{
 	temp_array := strings.Split(fs_node, ":")
-	port := temp_array[1]
-	portInt, err := strconv.Atoi(port)
-	if err != nil {
-		fmt.Printf("Error: to_fs_node transfer from %s\n", port)
-	}
-	portInt -= 1000 //9000 -> 8000
-	temp_array[1] = strconv.Itoa(portInt)
-	return strings.Join(temp_array, ":")
-	// return temp_array[0]
+	// port := temp_array[1]
+	// portInt, err := strconv.Atoi(port)
+	// if err != nil {
+	// 	fmt.Printf("Error: to_fs_node transfer from %s\n", port)
+	// }
+	// portInt -= 1000 //9000 -> 8000
+	// temp_array[1] = strconv.Itoa(portInt)
+	// return strings.Join(temp_array, ":")
+
+	// for vm testing
+	return temp_array[0]
 }
 
 func make_fs_nodes() [10]string {
 	var result [10]string
-	// for idx, _ := range result {
-	// 	var index int = idx + 1
-	// 	if index < 10 {
-	// 		result[idx] = "fa20-cs425-g35-0" + strconv.Itoa(index) + ".cs.illinois.edu:9000"
-	// 	} else {
-	// 		result[idx] = "fa20-cs425-g35-10.cs.illinois.edu:9000"
-	// 	}
-	// }
-	// for local test
 	for idx, _ := range result {
-		result[idx] = "127.0.0.1:" + strconv.Itoa(9000+idx)
+		var index int = idx + 1
+		if index < 10 {
+			result[idx] = "fa20-cs425-g35-0" + strconv.Itoa(index) + ".cs.illinois.edu:9000"
+		} else {
+			result[idx] = "fa20-cs425-g35-10.cs.illinois.edu:9000"
+		}
 	}
+	// for local test
+	// for idx, _ := range result {
+	// 	result[idx] = "127.0.0.1:" + strconv.Itoa(9000+idx)
+	// }
 	return result
 }
 
@@ -244,17 +248,17 @@ func unmarshalMsg(jsonMsg []byte) Message {
 
 func makeNodes() [10]string {
 	var result [10]string
-	// for idx, _ := range result {
-	// 	var index int = idx + 1
-	// 	if index < 10 {
-	// 		result[idx] = "fa20-cs425-g35-0" + strconv.Itoa(index) + ".cs.illinois.edu"
-	// 	} else {
-	// 		result[idx] = "fa20-cs425-g35-10.cs.illinois.edu"
-	// 	}
-	// }
-	// for local test
 	for idx, _ := range result {
-		result[idx] = "127.0.0.1:" + strconv.Itoa(8000+idx)
+		var index int = idx + 1
+		if index < 10 {
+			result[idx] = "fa20-cs425-g35-0" + strconv.Itoa(index) + ".cs.illinois.edu"
+		} else {
+			result[idx] = "fa20-cs425-g35-10.cs.illinois.edu"
+		}
 	}
+	// for local test
+	// for idx, _ := range result {
+	// 	result[idx] = "127.0.0.1:" + strconv.Itoa(8000+idx)
+	// }
 	return result
 }

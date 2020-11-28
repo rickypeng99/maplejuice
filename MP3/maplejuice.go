@@ -10,11 +10,12 @@ import (
 	"strings"
 	"io"
 	"os/exec"
+	"path/filepath"
 )
 
 var MJ_PORT string = "10000"
-// var MASTER_NODE_MJ string = "fa20-cs425-g35-01.cs.illinois.edu:7000"
-var MASTER_NODE_MJ string = "127.0.0.1:10000"
+var MASTER_NODE_MJ string = "fa20-cs425-g35-01.cs.illinois.edu:10000"
+// var MASTER_NODE_MJ string = "127.0.0.1:10000"
 
 // only the master is maintaining these channels
 var ackChannel = make(chan ACKmessage)
@@ -70,12 +71,12 @@ func main() {
 		MJ_PORT = os.Args[1]
 	}
 	// get host name of the current machine
-	// hostname, err := os.Hostname()
-	// if err != nil {
-	// 	log.Printf("os.HostName() err")
-	// }
+	hostname, err := os.Hostname()
+	if err != nil {
+		log.Printf("os.HostName() err")
+	}
 	// for local test
-	hostname := "127.0.0.1:" + MJ_PORT
+	// hostname := "127.0.0.1:" + MJ_PORT
 	portInt, err := strconv.Atoi(MJ_PORT)
 	if err != nil {
 		fmt.Printf("Error: strconv.Atoi from %s\n", hostname)
@@ -86,10 +87,14 @@ func main() {
 	portInt -= 1000
 	// membership port
 	PORT = strconv.Itoa(portInt)
-	// membership_hostname := hostname
-	// hostname += ":" + MJ_PORT
-	fs_hostname := "127.0.0.1:" + FS_PORT
-	membership_hostname := "127.0.0.1:" + PORT
+
+	membership_hostname := hostname
+	fs_hostname := hostname + FS_PORT
+	hostname += ":" + MJ_PORT
+
+	// for local test
+	//fs_hostname := "127.0.0.1:" + FS_PORT
+	//membership_hostname := "127.0.0.1:" + PORT
 
 	fmt.Printf("MapleJuice is at: %s\n", hostname)
 	fmt.Printf("SDFS is at: %s\n", fs_hostname)
@@ -355,13 +360,29 @@ func init_maple(command MJcommand, fs_server *FSserver) {
 	var allFiles []string
 
 	//------FOR TESTING PURPOSE
-	fileDirectory["input/input1.txt"] = []string {MASTER_NODE}
-	fileDirectory["input/input2.txt"] = []string {MASTER_NODE}
-	fileDirectory["input/input3.txt"] = []string {MASTER_NODE}
-	fileDirectory["input/input4.txt"] = []string {MASTER_NODE}
-	fileDirectory["input/input5.txt"] = []string {MASTER_NODE}
+	// fileDirectory["input/input1.txt"] = []string {MASTER_NODE}
+	// fileDirectory["input/input2.txt"] = []string {MASTER_NODE}
+	// fileDirectory["input/input3.txt"] = []string {MASTER_NODE}
+	// fileDirectory["input/input4.txt"] = []string {MASTER_NODE}
+	// fileDirectory["input/input5.txt"] = []string {MASTER_NODE}
 
 	//------TESTING ENDS
+
+	// get all input files under that directory
+	var local_files []string
+
+    root := local_folder_path + command.Dir + "/"
+    err := filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
+        local_files = append(local_files, path)
+        return nil
+    })
+    if err != nil {
+        panic(err)
+    }
+    for _, file := range local_files {
+        fileDirectory[command.Dir + "/" + file] = []string {MASTER_NODE}
+    }
+
 
 	for key, _ := range fileDirectory {
 		// traverse key, which should be <command.Dir>/inputFiles
@@ -444,7 +465,7 @@ func init_juice(command MJcommand, fs_server *FSserver) {
 		filename := local_folder_path + actualFilename
 		fd, err := os.OpenFile(filename, os.O_CREATE|os.O_WRONLY, 0666)
 		if err != nil {
-			fmt.Println("INIT_JUICE: Error writing to file:%s\n", filename)
+			fmt.Printf("INIT_JUICE: Error writing to file:%s\n", filename)
 			return
 		}
 		writer := bufio.NewWriter(fd)
@@ -535,8 +556,8 @@ func monitorACK(allFiles []string, partition_res map[string][]string, command MJ
 		defer zipIn.Close()
 		n, err := io.Copy(out, zipIn)
 		if err != nil {
-			log.Printf("%s\n", n)
-			log.Fatalf("failed to append zip file to output:", err)
+			log.Printf("%d\n", n)
+			log.Fatalf("failed to append zip file to output: %s", err)
 		}
 	}
 
@@ -545,15 +566,25 @@ func monitorACK(allFiles []string, partition_res map[string][]string, command MJ
 
 func fetchInputFiles(message MJmessage, fs_server *FSserver) []string{
 	if message.MessageType == MAPLE {
-		// nodes create a folder named <prefix> upon receiving MAPLE; It will later retrieve key files during the JUICE phase from this folder
-		// path := local_folder_path + message.Command.Prefix + "/"
-		// if _, err := os.Stat(path); os.IsNotExist(err) {
-		// 	// if prefix directory does not exist 
-		// 	err := os.Mkdir(path, 0755)
-		// 	if err != nil {
-		// 		log.Fatal(err)
-		// 	}
-		// }
+		// nodes create a folder named <prefix> and <input dir> upon receiving MAPLE; It will later retrieve key files during the JUICE phase from this folder
+		path := local_folder_path + message.Command.Prefix + "/"
+
+		if _, err := os.Stat(path); os.IsNotExist(err) {
+			// if prefix directory does not exist 
+			err := os.Mkdir(path, 0755)
+			if err != nil {
+				log.Fatal(err)
+			}
+		}
+
+		path = local_folder_path + message.Command.Dir + "/"
+		if _, err := os.Stat(path); os.IsNotExist(err) {
+			// if input directory does not exist 
+			err := os.Mkdir(path, 0755)
+			if err != nil {
+				log.Fatal(err)
+			}
+		}
 	} 
 	files := message.Filenames
 	files_to_get := 0
