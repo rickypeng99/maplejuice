@@ -554,7 +554,7 @@ func monitorACK(allFiles []string, partition_res map[string][]string, command MJ
 	combinedName := getCombinedName(command.Prefix, command_type)
 	out, _ := os.OpenFile(combinedName, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644)
 	for _, file := range intermediate_files {
-		zipIn, err := os.Open(local_folder_path	+ file)
+		zipIn, err := os.Open(local_folder_path	+ file + "_master")
 		if err != nil {
 			log.Fatalln("failed to open zip for reading:", err)
 		}
