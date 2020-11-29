@@ -62,7 +62,7 @@ func outputFile(filename string, kv map[string]int) {
 
 
 func main() {
-    if len(os.Args) < 2 {
+    if len(os.Args) != 3 {
         fmt.Println("Usage: ./wordFreq_juice <input_file> <output_file>")
     }
 

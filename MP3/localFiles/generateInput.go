@@ -37,7 +37,7 @@ func main() {
 	}
 
 	words := loadDictionary()
-	seperator := " "
+	seperator := "\n"
 	fileCount := 10 // number of files to be generated
 	wordCount := 1000000 // word count in each file
 

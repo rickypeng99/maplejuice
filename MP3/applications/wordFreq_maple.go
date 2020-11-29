@@ -10,7 +10,7 @@ import (
     "strings"
 )
 
-func readFile(filename string, reg *regexp.Regexp) []string{
+func readFile(filename string) []string{
 	file, err := os.Open(filename)
     if err != nil {
         log.Println("Error: ", err)
@@ -21,8 +21,8 @@ func readFile(filename string, reg *regexp.Regexp) []string{
 	var allLines []string
 
     for scanner.Scan() {
-      line := scanner.Text()
-      allLines = append(allLines, line)
+		line := scanner.Text()
+		allLines = append(allLines, line)
 	}
 	
 	file.Close()
@@ -67,7 +67,7 @@ func outputFile(filename string, kv map[string]int) {
 
 
 func main() {
-    if len(os.Args) != 2 {
+    if len(os.Args) != 3 {
         fmt.Println("Usage: ./wordFreq_maple <input_file> <output_file>")
 	}
 	
@@ -76,7 +76,7 @@ func main() {
         log.Println(err)
 	}
 	
-	allLines := readFile(os.Args[1], reg)
+	allLines := readFile(os.Args[1])
 	kv := mapper(allLines, reg)
 	outputFile(os.Args[2], kv)
 
