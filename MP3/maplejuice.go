@@ -507,10 +507,10 @@ func init_juice(command MJcommand, fs_server *FSserver, membership_server *Serve
 	sendInputFileToNodes(partition_res, JUICE, command)	
 
 	// wait for ack messages
-	go monitorACK(allKeys, partition_res, command, membership_server)
+	go monitorACK(allKeys, partition_res, command, membership_server, after_identity)
 }
 
-func monitorACK(allFiles []string, partition_res map[string][]string, command MJcommand, membership_server *Server) {
+func monitorACK(allFiles []string, partition_res map[string][]string, command MJcommand, membership_server *Server, after_identity) {
 
 	startTime := time.Now()
 
@@ -577,6 +577,9 @@ func monitorACK(allFiles []string, partition_res map[string][]string, command MJ
 		getJuiceName = true
 	}
 	combinedName := getCombinedName(command, getJuiceName)
+	if after_identity {
+		combinedName += "_after_identity"
+	}
 	out, _ := os.OpenFile(combinedName, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644)
 	for _, file := range intermediate_files {
 		zipIn, err := os.Open(local_folder_path	+ file + "_master")
