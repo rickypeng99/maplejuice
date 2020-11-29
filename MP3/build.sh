@@ -1,3 +1,5 @@
+#!/bin/bash
+
 git clean -dxff
 go build maplejuice.go mp1.go mp2.go utils.go
 go build ./applications/wordFreq_maple.go
