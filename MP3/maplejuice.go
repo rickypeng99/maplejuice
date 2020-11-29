@@ -484,6 +484,7 @@ func init_juice(command MJcommand, fs_server *FSserver) {
 		node_index := index % nodes_length
 		partition_res[MJ_NODES[node_index]] = append(partition_res[MJ_NODES[node_index]], actualFilename)
 		// put the key file (TODO: remember to create prefix folder in every node)
+		fileDirectory[actualFilename] = []string{MASTER_NODE}
 		// send_to_master(fs_server, actualFilename, actualFilename, PUT)
 		index += 1
 	}
