@@ -408,12 +408,13 @@ func init_maple(command MJcommand, fs_server *FSserver, membership_server *Serve
 	// hash-partition the files
 	// num_maples, err := strconv.Atoi(command.Num)
 	partition_res := make(map[string][]string)
-	nodes_length := len(MJ_NODES)
+	nodes := get_running_nodes(membership_server)
+	nodes_length := len(nodes)
 	for index, file := range allFiles {
 		// TODO: change to running nodes only later
 		node_index := index % nodes_length
 		// let master remember the distribution
-		partition_res[MJ_NODES[node_index]] = append(partition_res[MJ_NODES[node_index]], file)
+		partition_res[nodes[node_index]] = append(partition_res[nodes[node_index]], file)
 	}
 
 	for key, input_files := range partition_res {
@@ -453,8 +454,6 @@ func init_juice(command MJcommand, fs_server *FSserver, membership_server *Serve
 	for scanner.Scan(){
 		line := scanner.Text()
 		key_val := strings.Split(line, ",")
-		fmt.Println(key_val[0])
-		fmt.Println(key_val[1])
 		kv[key_val[0]] = append(kv[key_val[0]], key_val[1])
 	}
 	fd.Close()
@@ -464,7 +463,8 @@ func init_juice(command MJcommand, fs_server *FSserver, membership_server *Serve
 	var allKeys []string
 	index := 0
 	// TODO: change to running nodes
-	nodes_length := len(MJ_NODES)
+	nodes := get_running_nodes(membership_server)
+	nodes_length := len(nodes)
 	for key, val := range kv {
 		allKeys = append(allKeys, key)
 		actualFilename := prefix + "/" + key
@@ -483,7 +483,7 @@ func init_juice(command MJcommand, fs_server *FSserver, membership_server *Serve
 		fd.Close()
 		// distribute key to nodes
 		node_index := index % nodes_length
-		partition_res[MJ_NODES[node_index]] = append(partition_res[MJ_NODES[node_index]], actualFilename)
+		partition_res[nodes[node_index]] = append(partition_res[nodes[node_index]], actualFilename)
 		// put the key file (TODO: remember to create prefix folder in every node)
 		fileDirectory[actualFilename] = []string{MASTER_NODE}
 		// send_to_master(fs_server, actualFilename, actualFilename, PUT)

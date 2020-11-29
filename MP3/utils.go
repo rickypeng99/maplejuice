@@ -55,6 +55,16 @@ func to_mj_node(hostname string) string{
 	return hostname + ":10000"
 }
 
+func get_running_nodes(membership_server *Server) []string {
+	var res []string
+	for hostname, server := range membership_server.MembershipMap {
+		if server.Status == RUNNING {
+			res = append(res, to_mj_node(hostname))
+		}
+	}
+	return res
+}
+
 // ------------------------------------------UTILITY FUNCTIONS FOR FS---------------------------------------------
 func marshalFSmsg(message FSmessage) []byte {
 	//marshal the message to json

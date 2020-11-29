@@ -17,6 +17,12 @@ var sdfs_folder_path = os.Getenv("HOME") + "/cs425_mps_group_35/MP3/sdfsFiles/"
 
 func main() {
 	rand.Seed(123456)
+	
+	input_type := "" 
+
+	if len(os.Args) == 2 {
+		input_type = os.Args[1]
+	}
 
 	// create a folder at localfiles folder
 	path := local_folder_path + "input" + "/"
@@ -36,18 +42,48 @@ func main() {
 			}
 	}
 
-	words := loadDictionary()
-	seperator := "\n"
 	fileCount := 10 // number of files to be generated
-	wordCount := 1000000 // word count in each file
+	wordCount := 1000000 // word count in each file (used for wordFreq)
+	pairCount := 300000 // pair count (used for voting)
+	if input_type == "vote" {
+		seperator := " "
+		var names []string
+		names = append(names, "Charmander")
+		names = append(names, "Bulbasaur")
+		names = append(names, "Squirtle")
+		for i := 0; i < fileCount; i++ {
+			output_local, _ := os.OpenFile(path + "input" + strconv.Itoa(i), os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0777)
+			writer_local := bufio.NewWriter(output_local)
 
-	// write to localfiles and sdfs_files
-	for i := 0; i < fileCount; i++ {
-		generated := randomWords(wordCount, seperator, words)
-		generateFile(generated, path + "input" + strconv.Itoa(i))
-		generateFile(generated, path_sdfs + "input" + strconv.Itoa(i))
+			output_sdfs, _ := os.OpenFile(path_sdfs + "input" + strconv.Itoa(i), os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0777)
+			writer_sdfs := bufio.NewWriter(output_sdfs)
+			for j := 0; j < pairCount; j++ {
+				generated := randomWords(3, seperator, names)
+				fmt.Fprintln(writer_local, generated)
+				fmt.Fprintln(writer_sdfs, generated)
+			}
+			writer_local.Flush()
+			writer_sdfs.Flush()
 
+			output_local.Close()
+			output_sdfs.Close()
+		}
+
+	} else {
+		// default - generate word freq input
+		words := loadDictionary()
+		seperator := "\n"
+		
+		// write to localfiles and sdfs_files
+		for i := 0; i < fileCount; i++ {
+			generated := randomWords(wordCount, seperator, words)
+			generateFile(generated, path + "input" + strconv.Itoa(i))
+			generateFile(generated, path_sdfs + "input" + strconv.Itoa(i))
+
+		}
 	}
+
+	
 	
 }
 
