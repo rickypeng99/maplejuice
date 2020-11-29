@@ -3,5 +3,7 @@ test.exe
 test.go
 localFiles/
 sdfsFiles/
-applications/
-!applications/build.sh
+wordFreq_juice
+wordFreq_maple
+wordCount_juice
+wordCount_juice
