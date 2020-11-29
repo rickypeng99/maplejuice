@@ -467,7 +467,7 @@ func init_juice(command MJcommand, fs_server *FSserver) {
 	for key, val := range kv {
 		allKeys = append(allKeys, key)
 		actualFilename := prefix + "/" + key
-		filename := local_folder_path + actualFilename
+		filename := sdfs_folder_path + actualFilename
 		fd, err := os.OpenFile(filename, os.O_CREATE|os.O_WRONLY, 0666)
 		if err != nil {
 			fmt.Printf("INIT_JUICE: Error writing to file:%s\n", filename)
@@ -567,7 +567,7 @@ func monitorACK(allFiles []string, partition_res map[string][]string, command MJ
 		}
 	}
 
-	fmt.Printf("Finished maple for prefix: %s\n", command.Prefix)
+	fmt.Printf("Finished %s for prefix: %s\n", command_type, command.Prefix)
 }
 
 func fetchInputFiles(message MJmessage, fs_server *FSserver) []string{
