@@ -11,6 +11,7 @@ import (
 	"io"
 	"os/exec"
 	"path/filepath"
+	"time"
 )
 
 var MJ_PORT string = "10000"
@@ -328,10 +329,10 @@ func mjMessageHandler(server *MJserver, fs_server *FSserver, membership_server *
 		switch message.MessageType {
 			case MAPLE_INIT:
 				// initiating & monitoring maple process
-				init_maple(message.Command, fs_server)
+				init_maple(message.Command, fs_server, membership_server)
 			case JUICE_INIT:
 				// initiating & monitoring juice process
-				init_juice(message.Command, fs_server)
+				init_juice(message.Command, fs_server, membership_server)
 			case MAPLE_ACK:
 				// construct an ACK message and send it into the channel
 				constructACK(MAPLE_ACK, message)
@@ -353,7 +354,7 @@ func mjMessageHandler(server *MJserver, fs_server *FSserver, membership_server *
 /**
 INIT MAPLE / JUICE FUNCTIONS, ONLY EXECUTABLE BY MASTERS
 **/
-func init_maple(command MJcommand, fs_server *FSserver) {
+func init_maple(command MJcommand, fs_server *FSserver, membership_server *Server) {
 	// get all files in master's sdfs folder
 	// sub folder input by user; Typically, it should be sdfsFiles/<command.Dir>/inputFiles
 	dirName := command.Dir
@@ -427,11 +428,11 @@ func init_maple(command MJcommand, fs_server *FSserver) {
 	sendInputFileToNodes(partition_res, MAPLE, command)
 
 	// wait for ack messages
-	go monitorACK(allFiles, partition_res, command)
+	go monitorACK(allFiles, partition_res, command, membership_server)
 
 }
 
-func init_juice(command MJcommand, fs_server *FSserver) {
+func init_juice(command MJcommand, fs_server *FSserver, membership_server *Server) {
 	// TODO: get the combined from maple
 	prefix := command.Prefix
 	combinedName := getCombinedName(prefix, MAPLE)
@@ -493,10 +494,13 @@ func init_juice(command MJcommand, fs_server *FSserver) {
 	sendInputFileToNodes(partition_res, JUICE, command)	
 
 	// wait for ack messages
-	go monitorACK(allKeys, partition_res, command)
+	go monitorACK(allKeys, partition_res, command, membership_server)
 }
 
-func monitorACK(allFiles []string, partition_res map[string][]string, command MJcommand) {
+func monitorACK(allFiles []string, partition_res map[string][]string, command MJcommand, membership_server *Server) {
+
+	startTime := time.Now()
+
 	command_type := command.Type
 	var ack_type string
 	if command_type == MAPLE {
@@ -519,7 +523,7 @@ func monitorACK(allFiles []string, partition_res map[string][]string, command MJ
 	for num_acks < len(partition_res) {
 		select {
 			case ackMessage := <- ackChannel:
-				fmt.Printf("Receivec %s from ackChannel!\n", ackMessage.Type)
+				fmt.Printf("Received %s from ackChannel!\n", ackMessage.Type)
 				if ackMessage.Type == ack_type {
 					intermediate_files = append(intermediate_files, ackMessage.Filename)
 					// files_ack_map[ackMessage.InputFile] = true
@@ -528,7 +532,7 @@ func monitorACK(allFiles []string, partition_res map[string][]string, command MJ
 					fmt.Printf("%d\n", num_acks)
 				}
 			case failed_host := <- failChannel:
-				fmt.Printf("Receivec failure from failChannel!\n")
+				fmt.Printf("Received failure from failChannel!\n")
 				if _, ok := partition_res[failed_host]; ok{
 
 					// send new-scheduled files to corresponding nodes
@@ -536,8 +540,11 @@ func monitorACK(allFiles []string, partition_res map[string][]string, command MJ
 						var host string
 						for _, node := range MJ_NODES {
 							// TODO: if this one is running
-							host = node
-							break
+							node = to_membership_node(node)
+							if (membership_server.MembershipMap[node].Status == RUNNING) {
+								host = node
+								break
+							}
 						}
 						partition_res_temp := make(map[string][]string)
 						partition_res_temp[host] = partition_res[failed_host]
@@ -567,7 +574,8 @@ func monitorACK(allFiles []string, partition_res map[string][]string, command MJ
 		}
 	}
 
-	fmt.Printf("Finished %s for prefix: %s\n", command_type, command.Prefix)
+	elapsedTime := time.Since(startTime)
+	fmt.Printf("Took %s to finish %s for prefix: %s\n", elapsedTime, command_type, command.Prefix)
 }
 
 func fetchInputFiles(message MJmessage, fs_server *FSserver) []string{
