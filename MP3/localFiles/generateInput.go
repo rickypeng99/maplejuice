@@ -39,13 +39,13 @@ func main() {
 	words := loadDictionary()
 	seperator := " "
 	fileCount := 10 // number of files to be generated
-	wordCount := 100 // word count in each file
+	wordCount := 1000000 // word count in each file
 
 	// write to localfiles and sdfs_files
 	for i := 0; i < fileCount; i++ {
 		generated := randomWords(wordCount, seperator, words)
 		generateFile(generated, path + "input" + strconv.Itoa(i))
-		generateFile(generated, path_sdfs + "input" + strconv.Itoa(i))
+		// generateFile(generated, path_sdfs + "input" + strconv.Itoa(i))
 
 	}
 	
