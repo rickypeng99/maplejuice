@@ -63,6 +63,7 @@ const (
 	JUICE_INIT string = "JUICE_INIT"
 	JUICE string = "JUICE"
 	JUICE_ACK string = "JUICE_ACK"
+	JUICE_AFTER_IDENTITY string = "JUICE_AFTER_IDENTITY"
 )
 
 
@@ -275,10 +276,19 @@ func mjCommandReader(mj_server *MJserver, fs_server *FSserver, membership_server
 					fmt.Printf("command read error! show\n")
 				}
 				fileInfos := strings.Split(string(sentence), " ")
-				if len(fileInfos) != 4 {
+				if len(fileInfos) == 5 {
+					var command_temp MJcommand = MJcommand {
+						Type: JUICE,
+						Exe: fileInfos[0],
+						Num: fileInfos[1],
+						Prefix: fileInfos[2],
+						Dir: strings.TrimSuffix(fileInfos[3], "\n"),
+					}
+					send_to_master_mj(mj_server, JUICE_AFTER_IDENTITY, command_temp, "")
+				} else if len(fileInfos) != 4 {
 					fmt.Println("Please input <juice_exe> <num_juices> <sdfs_intermediate_filename_prefix> <sdfs_dest_filename>")
 					break
-				}
+				} 
 				var command_temp MJcommand = MJcommand {
 					Type: JUICE,
 					Exe: fileInfos[0],
@@ -332,7 +342,9 @@ func mjMessageHandler(server *MJserver, fs_server *FSserver, membership_server *
 				init_maple(message.Command, fs_server, membership_server)
 			case JUICE_INIT:
 				// initiating & monitoring juice process
-				init_juice(message.Command, fs_server, membership_server)
+				init_juice(message.Command, fs_server, membership_server, false)
+			case JUICE_AFTER_IDENTITY:
+				init_juice(message.Command, fs_server, membership_server, true)
 			case MAPLE_ACK:
 				// construct an ACK message and send it into the channel
 				constructACK(MAPLE_ACK, message)
@@ -433,10 +445,10 @@ func init_maple(command MJcommand, fs_server *FSserver, membership_server *Serve
 
 }
 
-func init_juice(command MJcommand, fs_server *FSserver, membership_server *Server) {
+func init_juice(command MJcommand, fs_server *FSserver, membership_server *Server, after_identity bool) {
 	// TODO: get the combined from maple
 	prefix := command.Prefix
-	combinedName := getCombinedName(prefix, MAPLE)
+	combinedName := getCombinedName(command, after_identity)
 	if _, err := os.Stat(combinedName); os.IsNotExist(err) {
 		// if directory does not exist 
 		fmt.Printf("INIT_JUICE: Prefix %s does not exist on master\n", prefix)
@@ -559,7 +571,11 @@ func monitorACK(allFiles []string, partition_res map[string][]string, command MJ
 	// other nodes will scp the filename (o_append for multiple files to one single file) to master when sending ack
 
 	// https://stackoverflow.com/questions/52704109/how-to-merge-or-combine-2-files-into-single-file
-	combinedName := getCombinedName(command.Prefix, command_type)
+	getJuiceName := false
+	if command_type == JUICE {
+		getJuiceName = true
+	}
+	combinedName := getCombinedName(command, getJuiceName)
 	out, _ := os.OpenFile(combinedName, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644)
 	for _, file := range intermediate_files {
 		zipIn, err := os.Open(local_folder_path	+ file + "_master")
@@ -581,35 +597,7 @@ func monitorACK(allFiles []string, partition_res map[string][]string, command MJ
 func fetchInputFiles(message MJmessage, fs_server *FSserver) []string{
 	if message.MessageType == MAPLE {
 		// nodes create a folder named <prefix> and <input dir> upon receiving MAPLE; It will later retrieve key files during the JUICE phase from this folder
-
-		path := local_folder_path + message.Command.Prefix + "/"
-
-		if _, err := os.Stat(path); os.IsNotExist(err) {
-			// if prefix directory does not exist at local
-			err := os.Mkdir(path, 0755)
-			if err != nil {
-				log.Fatal(err)
-			}
-		}
-
-		path = sdfs_folder_path + message.Command.Prefix + "/"
-
-		if _, err := os.Stat(path); os.IsNotExist(err) {
-			// if prefix directory does not exist at sdfs
-			err := os.Mkdir(path, 0755)
-			if err != nil {
-				log.Fatal(err)
-			}
-		}
-
-		path = local_folder_path + message.Command.Dir + "/"
-		if _, err := os.Stat(path); os.IsNotExist(err) {
-			// if input directory does not exist 
-			err := os.Mkdir(path, 0755)
-			if err != nil {
-				log.Fatal(err)
-			}
-		}
+		createFolderIfNonExisted(message)
 	} 
 	files := message.Filenames
 	files_to_get := 0
@@ -648,7 +636,7 @@ func executeInputFile(message MJmessage, got_files []string, server *MJserver) {
 		// execute each input file
 		exe := "applications/" + command.Exe
 		localFilename := local_folder_path + file
-		output_file := "output_" + message.MessageType + "_" +server.Hostname
+		output_file := command.Prefix + "_immediate/output_" + message.MessageType + "_" +server.Hostname
 		output_path := local_folder_path + output_file
 		_, err := exec.Command(exe, localFilename, output_path).Output()
 		if err != nil {

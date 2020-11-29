@@ -8,12 +8,42 @@ import (
 	"strings"
 	"hash/fnv"
 	"errors"
+	"os"
 
 )
 // ------------------------------------------UTILITY FUNCTIONS FOR MAPLE JUICE---------------------------------------------
-func getCombinedName(prefix string, cmdType string) string {
+
+func createFolderIfNonExisted(message MJmessage) {
+
+	folders := [5]string{
+		local_folder_path + message.Command.Prefix + "/",
+		sdfs_folder_path + message.Command.Prefix + "/",
+		local_folder_path + message.Command.Dir + "/",
+		local_folder_path + message.Command.Prefix + "_immediate/",
+		local_folder_path + message.Command.Prefix + "_immediate/",
+	}
+
+	for _, path := range folders {
+		if _, err := os.Stat(path); os.IsNotExist(err) {
+			// if prefix directory does not exist at local
+			err := os.Mkdir(path, 0755)
+			if err != nil {
+				log.Fatal(err)
+			}
+		}
+	}
+}
+
+func getCombinedName(command MJcommand, getJuiceName bool) string {
 	// cmdType: MAPLE OR JUICE
+	cmdType := command.Type
+	prefix := command.Prefix
+	folder := command.Dir
+	if getJuiceName {
+		return local_folder_path + folder
+	}
 	return local_folder_path + MASTER_NODE_MJ + "_" + "combined_" + cmdType + "_" + prefix
+	
 }
 
 func marshalMJmsg(message MJmessage) []byte {
