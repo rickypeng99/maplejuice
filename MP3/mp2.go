@@ -457,10 +457,17 @@ func fsMessageHandler(server *FSserver, resp []byte, bytes_read int, membership_
 			dstPath := sdfs_folder_path + message.SdfsFilename
 			// TODO: try to implement TCP file transfer instead of using the built in command
 			cmd := exec.Command("scp", fromPath, dstPath)
+			var out bytes.Buffer
+			var stderr bytes.Buffer
+			cmd.Stdout = &out
+			cmd.Stderr = &stderr
 			fmt.Println(cmd)
 			err := cmd.Run()
-			fmt.Println(err)
-			
+			if err != nil {
+				fmt.Println(fmt.Sprint(err) + ": " + stderr.String())
+				return
+			}
+
 			server.Files[message.SdfsFilename] = 1
 			send_to_master(server, message.LocalFilename, message.SdfsFilename, REPLICATE_COMPLETE)
 		
