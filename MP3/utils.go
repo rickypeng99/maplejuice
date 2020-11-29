@@ -36,13 +36,12 @@ func createFolderIfNonExisted(message MJmessage) {
 
 func getCombinedName(command MJcommand, getJuiceName bool) string {
 	// cmdType: MAPLE OR JUICE
-	cmdType := command.Type
 	prefix := command.Prefix
 	folder := command.Dir
 	if getJuiceName {
 		return local_folder_path + folder
 	}
-	return local_folder_path + MASTER_NODE_MJ + "_" + "combined_" + cmdType + "_" + prefix
+	return local_folder_path + MASTER_NODE_MJ + "_" + "combined_MAPLE_" + prefix
 	
 }
 
