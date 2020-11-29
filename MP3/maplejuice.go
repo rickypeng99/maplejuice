@@ -442,7 +442,7 @@ func init_maple(command MJcommand, fs_server *FSserver, membership_server *Serve
 	sendInputFileToNodes(partition_res, MAPLE, command)
 
 	// wait for ack messages
-	go monitorACK(allFiles, partition_res, command, membership_server)
+	go monitorACK(allFiles, partition_res, command, membership_server, false)
 
 }
 
@@ -510,7 +510,7 @@ func init_juice(command MJcommand, fs_server *FSserver, membership_server *Serve
 	go monitorACK(allKeys, partition_res, command, membership_server, after_identity)
 }
 
-func monitorACK(allFiles []string, partition_res map[string][]string, command MJcommand, membership_server *Server, after_identity) {
+func monitorACK(allFiles []string, partition_res map[string][]string, command MJcommand, membership_server *Server, after_identity bool) {
 
 	startTime := time.Now()
 
