@@ -51,6 +51,10 @@ func make_mj_nodes() [10]string {
 	return result
 }
 
+func to_mj_node(hostname string) string{
+	return hostname + ":10000"
+}
+
 // ------------------------------------------UTILITY FUNCTIONS FOR FS---------------------------------------------
 func marshalFSmsg(message FSmessage) []byte {
 	//marshal the message to json

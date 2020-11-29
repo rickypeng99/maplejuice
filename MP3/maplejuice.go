@@ -533,7 +533,7 @@ func monitorACK(allFiles []string, partition_res map[string][]string, command MJ
 				}
 			case failed_host := <- failChannel:
 				fmt.Printf("Received failure from failChannel :%s\n", failed_host)
-				if _, ok := partition_res[failed_host + ":10000"]; ok{
+				if _, ok := partition_res[to_mj_node(failed_host)]; ok{
 
 					// send new-scheduled files to corresponding nodes
 					if !host_ack_map[failed_host] {
@@ -542,7 +542,7 @@ func monitorACK(allFiles []string, partition_res map[string][]string, command MJ
 							// TODO: if this one is running
 							node = to_membership_node(node)
 							if (membership_server.MembershipMap[node].Status == RUNNING) {
-								host = node
+								host = to_mj_node(node)
 								break
 							}
 						}
