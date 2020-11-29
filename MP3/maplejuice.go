@@ -285,6 +285,7 @@ func mjCommandReader(mj_server *MJserver, fs_server *FSserver, membership_server
 						Dir: strings.TrimSuffix(fileInfos[3], "\n"),
 					}
 					send_to_master_mj(mj_server, JUICE_AFTER_IDENTITY, command_temp, "")
+					break
 				} else if len(fileInfos) != 4 {
 					fmt.Println("Please input <juice_exe> <num_juices> <sdfs_intermediate_filename_prefix> <sdfs_dest_filename>")
 					break
@@ -451,7 +452,7 @@ func init_juice(command MJcommand, fs_server *FSserver, membership_server *Serve
 	combinedName := getCombinedName(command, after_identity)
 	if _, err := os.Stat(combinedName); os.IsNotExist(err) {
 		// if directory does not exist 
-		fmt.Printf("INIT_JUICE: Prefix %s does not exist on master\n", prefix)
+		fmt.Printf("INIT_JUICE: filename %s does not exist on master\n", combinedName)
 		return
 	}
 	
