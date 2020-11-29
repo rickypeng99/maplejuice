@@ -463,6 +463,7 @@ func fsMessageHandler(server *FSserver, resp []byte, bytes_read int, membership_
 			cmd.Stderr = &stderr
 			fmt.Println(cmd)
 			err := cmd.Run()
+			fmt.Println(err)
 			if err != nil {
 				fmt.Println(fmt.Sprint(err) + ": " + stderr.String())
 				return
