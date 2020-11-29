@@ -547,7 +547,7 @@ func monitorACK(allFiles []string, partition_res map[string][]string, command MJ
 							}
 						}
 						partition_res_temp := make(map[string][]string)
-						partition_res_temp[host] = partition_res[failed_host]
+						partition_res_temp[host] = partition_res[to_mj_node(failed_host)]
 						sendInputFileToNodes(partition_res_temp, command_type, command)
 					}
 				}
