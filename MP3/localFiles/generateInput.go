@@ -45,7 +45,7 @@ func main() {
 	for i := 0; i < fileCount; i++ {
 		generated := randomWords(wordCount, seperator, words)
 		generateFile(generated, path + "input" + strconv.Itoa(i))
-		// generateFile(generated, path_sdfs + "input" + strconv.Itoa(i))
+		generateFile(generated, path_sdfs + "input" + strconv.Itoa(i))
 
 	}
 	
