@@ -532,8 +532,8 @@ func monitorACK(allFiles []string, partition_res map[string][]string, command MJ
 					fmt.Printf("%d\n", num_acks)
 				}
 			case failed_host := <- failChannel:
-				fmt.Printf("Received failure from failChannel!\n")
-				if _, ok := partition_res[failed_host]; ok{
+				fmt.Printf("Received failure from failChannel :%s\n", failed_host)
+				if _, ok := partition_res[failed_host + ":10000"]; ok{
 
 					// send new-scheduled files to corresponding nodes
 					if !host_ack_map[failed_host] {

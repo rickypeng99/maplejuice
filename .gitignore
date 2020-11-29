@@ -4,3 +4,4 @@ test.go
 localFiles/
 sdfsFiles/
 applications/
+!applications/build.sh
