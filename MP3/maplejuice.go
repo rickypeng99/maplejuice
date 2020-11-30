@@ -77,6 +77,7 @@ func main() {
 	if err != nil {
 		log.Printf("os.HostName() err")
 	}
+	fmt.Println(hostname)
 	last_place := string(hostname[len(hostname) - 1])
 	second_last := string(hostname[len(hostname) - 2])
 	hostname = "fa20-cs425-g35-" + second_last + last_place + ".cs.illinois.edu"
