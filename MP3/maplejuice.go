@@ -24,7 +24,7 @@ var failChannel = make(chan string) // fs_master -> mj_master
 var getAckChannel = make(chan FSmessage) // fs_node -> mj_node
 
 var MJ_NODES = make_mj_nodes()
-
+var outputId int = 0
 // MJ command
 type MJcommand struct {
 	Type string
@@ -645,8 +645,10 @@ func executeInputFile(message MJmessage, got_files []string, server *MJserver) {
 	exe := "applications/" + command.Exe
 	runes := []rune(command.Exe)
 	subExe := string(runes[2:])
-	output_file := command.Prefix + "_immediate/output_" + subExe + "_" +server.Hostname
+	outputId += 1
+	output_file := command.Prefix + "_immediate/output_" + strconv.Itoa(outputId) + "_" + subExe + "_" +server.Hostname
 	output_path := local_folder_path + output_file
+
 	for _, file := range got_files {
 		// execute each input file
 		localFilename := local_folder_path + file
