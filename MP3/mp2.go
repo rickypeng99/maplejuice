@@ -452,7 +452,7 @@ func fsMessageHandler(server *FSserver, resp []byte, bytes_read int, membership_
 	// commands that all nodes will be handling
 	switch message.MessageType {
 		case REPLICATE:
-			fromPath := "ruiqip2@" + remove_port_from_hostname(message.Info_Hostname) + ":" + local_folder_path + message.LocalFilename
+			fromPath := "qingyih2@" + remove_port_from_hostname(message.Info_Hostname) + ":" + local_folder_path + message.LocalFilename
 			// fromPath := "rickypeng99@" + remove_port_from_hostname(message.Info_Hostname) + ":" + local_folder_path + message.LocalFilename
 			dstPath := sdfs_folder_path + message.SdfsFilename
 			// TODO: try to implement TCP file transfer instead of using the built in command
@@ -473,7 +473,7 @@ func fsMessageHandler(server *FSserver, resp []byte, bytes_read int, membership_
 			send_to_master(server, message.LocalFilename, message.SdfsFilename, REPLICATE_COMPLETE)
 		
 		case RE_REPLICATE:
-			fromPath := "ruiqip2@" + remove_port_from_hostname(message.Info_Hostname) + ":" + sdfs_folder_path + message.SdfsFilename
+			fromPath := "qingyih2@" + remove_port_from_hostname(message.Info_Hostname) + ":" + sdfs_folder_path + message.SdfsFilename
 			// fromPath := "rickypeng99@" + remove_port_from_hostname(message.Info_Hostname) + ":" + sdfs_folder_path + message.SdfsFilename
 			dstPath := sdfs_folder_path + message.SdfsFilename
 			cmd := exec.Command("scp", fromPath, dstPath)
@@ -489,7 +489,7 @@ func fsMessageHandler(server *FSserver, resp []byte, bytes_read int, membership_
 			delete(server.Files, message.SdfsFilename)
 
 		case GET_ACK:
-			fromPath := "ruiqip2@" + remove_port_from_hostname(message.Info_Hostname) + ":" + sdfs_folder_path + message.SdfsFilename
+			fromPath := "qingyih2@" + remove_port_from_hostname(message.Info_Hostname) + ":" + sdfs_folder_path + message.SdfsFilename
 			// fromPath := "rickypeng99@" + remove_port_from_hostname(message.Info_Hostname) + ":" + sdfs_folder_path + message.SdfsFilename
 			dstPath := local_folder_path + message.LocalFilename
 			cmd := exec.Command("scp", fromPath, dstPath)

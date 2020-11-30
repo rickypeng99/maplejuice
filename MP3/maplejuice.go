@@ -659,7 +659,7 @@ func executeInputFile(message MJmessage, got_files []string, server *MJserver) {
 		}
 		// send the file to master
 
-		dstPath := "ruiqip2@" + remove_port_from_hostname(MASTER_NODE_MJ) + ":" + local_folder_path + output_file + "_master"
+		dstPath := "qingyih2@" + remove_port_from_hostname(MASTER_NODE_MJ) + ":" + local_folder_path + output_file + "_master"
 		fromPath := output_path
 		cmd := exec.Command("scp", fromPath, dstPath)
 		fmt.Println(cmd)
