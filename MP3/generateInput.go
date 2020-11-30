@@ -47,10 +47,7 @@ func main() {
 	pairCount := 300000 // pair count (used for voting)
 	if input_type == "vote" {
 		seperator := " "
-		var names []string
-		names = append(names, "Charmander")
-		names = append(names, "Bulbasaur")
-		names = append(names, "Squirtle")
+		names := []string{"Charmander", "Bulbasaur", "Squirtle"}
 		for i := 0; i < fileCount; i++ {
 			output_local, _ := os.OpenFile(path + "input" + strconv.Itoa(i), os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0777)
 			writer_local := bufio.NewWriter(output_local)
@@ -58,7 +55,9 @@ func main() {
 			output_sdfs, _ := os.OpenFile(path_sdfs + "input" + strconv.Itoa(i), os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0777)
 			writer_sdfs := bufio.NewWriter(output_sdfs)
 			for j := 0; j < pairCount; j++ {
-				generated := randomWords(3, seperator, names)
+				rand.Shuffle(len(names), func(i, j int) { names[i], names[j] = names[j], names[i] })
+				generated := strings.Join(names, seperator)
+
 				fmt.Fprintln(writer_local, generated)
 				fmt.Fprintln(writer_sdfs, generated)
 			}
