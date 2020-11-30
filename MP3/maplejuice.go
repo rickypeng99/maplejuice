@@ -643,7 +643,7 @@ func executeInputFile(message MJmessage, got_files []string, server *MJserver) {
 		ack_type = JUICE_ACK
 	}
 	exe := "applications/" + command.Exe
-	output_file := command.Prefix + "_immediate/output_" + message.MessageType + "_" +server.Hostname + time.Now().String()
+	output_file := command.Prefix + "_immediate/output_" + message.MessageType + "_" +server.Hostname
 	output_path := local_folder_path + output_file
 	for _, file := range got_files {
 		// execute each input file
