@@ -642,12 +642,12 @@ func executeInputFile(message MJmessage, got_files []string, server *MJserver) {
 	} else {
 		ack_type = JUICE_ACK
 	}
+	exe := "applications/" + command.Exe
+	output_file := command.Prefix + "_immediate/output_" + message.MessageType + "_" +server.Hostname
+	output_path := local_folder_path + output_file
 	for _, file := range got_files {
 		// execute each input file
-		exe := "applications/" + command.Exe
 		localFilename := local_folder_path + file
-		output_file := command.Prefix + "_immediate/output_" + message.MessageType + "_" +server.Hostname
-		output_path := local_folder_path + output_file
 		_, err := exec.Command(exe, localFilename, output_path).Output()
 		if err != nil {
 			log.Printf("Unable to execute command:%s on input file:%s. Error:%s\n",
@@ -661,9 +661,9 @@ func executeInputFile(message MJmessage, got_files []string, server *MJserver) {
 		fmt.Println(cmd)
 		err = cmd.Run()
 		fmt.Println(err)
-		// send maple_ack to master
-		send_to_master_mj(server, ack_type, command, output_file)
 	}
+	// send maple_ack to master
+	send_to_master_mj(server, ack_type, command, output_file)
 }
 
 func constructACK(msgType string, message MJmessage) {
