@@ -80,7 +80,9 @@ func main() {
 	fmt.Println(hostname)
 	last_place := string(hostname[len(hostname) - 1])
 	second_last := string(hostname[len(hostname) - 2])
-	hostname = "fa20-cs425-g35-" + second_last + last_place + ".cs.illinois.edu"
+	if last_place != "u" && second_last != "d" {
+		hostname = "fa20-cs425-g35-" + second_last + last_place + ".cs.illinois.edu"
+	}
 	// for local test
 	// hostname := "127.0.0.1:" + MJ_PORT
 	portInt, err := strconv.Atoi(MJ_PORT)
