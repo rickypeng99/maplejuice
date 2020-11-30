@@ -22,3 +22,9 @@ then
     go build generateInput.go
     ./generateInput
 fi
+
+if [ "$HOSTNAME" = fa20-cs425-g35-01 ];
+then
+    go build generateInput.go
+    ./generateInput
+fi
