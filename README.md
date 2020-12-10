@@ -21,13 +21,14 @@ if the maple function executed before this juice function is an identity functio
 
 ### Other commands:
 `You can use the following commands:  
+#### Failure detector related
 - `join`: make this machine join the membership list
 - `leave`: leave from the membership list
 - `change`: change from GOSSIP to ALL_TO_ALL, vice versa
 - `ls`: show all machines and their statuses in the membership
 - `id`: show ID of the current machine
 - `mode`: show current failure detecting mode
----------------File system related  
+#### File system related
 - `put`: insert/update a file to the distributed file system
 - `get`: get a file from the SDFS
 - `delete`: delete a file from the SDFS
